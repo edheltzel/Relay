@@ -26,6 +26,8 @@
   "codex_model": null,
   "sessions_dir": "~/.relay/sessions",
   "state_path": "~/.relay/state.json",
+  "audit_log_path": "~/.relay/audit.jsonl",
+  "audit_log_content": false,
   "assistant_dir": "./assistant",
   "reply_marker": "\n\n-- sent by relay"
 }
