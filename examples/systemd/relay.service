@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/relay --config %h/.config/relay/config.json
+ExecStart=%h/.local/bin/relay --config %h/.config/relay/config.toml
 WorkingDirectory=%h/.relay
 Restart=on-failure
 RestartSec=10
