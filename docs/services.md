@@ -1,4 +1,4 @@
-# Running relay as a Service
+# Running Relay as a Service
 
 This guide covers running `relay` continuously under a process manager.
 
@@ -121,7 +121,7 @@ Create `~/.config/systemd/user/relay.service`. You can start from
 
 ```ini
 [Unit]
-Description=relay personal assistant gateway
+Description=Relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 
@@ -182,7 +182,7 @@ allowlisted channel identity. Pending questions survive service restart.
 
 ## Restart Behavior
 
-`relay` only advances the selected channel cursor after a message is ignored or
+Relay only advances the selected channel cursor after a message is ignored or
 completed. If the process stops during an in-flight backend run, that message
 can be retried after restart. This avoids silently losing accepted messages,
 but it can repeat backend work or send a duplicate reply if the backend
