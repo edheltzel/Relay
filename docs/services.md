@@ -157,6 +157,13 @@ For a user service that survives logout, enable lingering:
 loginctl enable-linger "$USER"
 ```
 
+## Manual Jobs
+
+`relay job run <name>` executes in the invoking terminal process, not in the
+managed service. Use the same config file so the CLI and service share
+`relay.db`, `jobs_dir`, and the local per-job lock directory. Invalid job files
+are reported and disabled individually; they do not stop the messaging service.
+
 ## Restart Behavior
 
 `relay` only advances the selected channel cursor after a message is ignored or
