@@ -1,8 +1,8 @@
-# relay v1 PRD
+# Relay v1 PRD
 
 ## Summary
 
-relay is a small Rust binary that turns coding-agent runtimes into a personal
+Relay is a small Rust binary that turns coding-agent runtimes into a personal
 assistant you can text.
 
 It polls iMessage, filters allowed senders, loads user-owned assistant context,
@@ -55,9 +55,9 @@ Hermes and similar projects build more of the runtime: memory databases,
 summarizers, skills, subagents, schedulers, provider abstractions, and custom
 agent behavior.
 
-relay takes a narrower bet:
+Relay takes a narrower bet:
 
-| Area | Hermes-style product | relay |
+| Area | Hermes-style product | Relay |
 |---|---|---|
 | Runtime | Built into the product | External backend |
 | Tools | Product-owned | Backend-owned |
@@ -69,13 +69,13 @@ relay takes a narrower bet:
 ## Core User Flow
 
 1. User sends a text.
-2. relay reads the new row from `chat.db`.
-3. relay filters by allowlist and reply marker.
-4. relay loads assistant context.
-5. relay resolves the thread's backend session.
-6. relay runs Claude Code or Codex.
-7. relay sends the final reply back over iMessage.
-8. relay stores the latest message row and backend session state.
+2. Relay reads the new row from `chat.db`.
+3. Relay filters by allowlist and reply marker.
+4. Relay loads assistant context.
+5. Relay resolves the thread's backend session.
+6. Relay runs Claude Code or Codex.
+7. Relay sends the final reply back over iMessage.
+8. Relay stores the latest message row and backend session state.
 
 ## Components
 
@@ -161,7 +161,7 @@ user prompt.
 | `audit_log_content` | Whether audit events include message and reply text. |
 | `database_path` | Canonical SQLite history path; defaults to `~/.relay/relay.db`. |
 | `assistant_dir` | Directory with `SOUL.md`; defaults to `~/.push`. |
-| `reply_marker` | Footer used to skip relay's own replies. |
+| `reply_marker` | Footer used to skip Relay's own replies. |
 
 ## Control Commands
 
@@ -172,8 +172,8 @@ user prompt.
 
 - A configured self-chat message gets a reply.
 - Non-allowlisted senders are ignored.
-- relay does not answer messages containing the reply marker.
-- relay only advances `last_row_id` after a message is ignored or completed.
+- Relay does not answer messages containing the reply marker.
+- Relay only advances `last_row_id` after a message is ignored or completed.
 - `/clear` starts a fresh backend session.
 - Claude backend can create and resume a session.
 - Codex backend can create a session, store the Codex thread id, and resume it.
