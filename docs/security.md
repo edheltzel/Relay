@@ -67,17 +67,19 @@ service environment using the narrowest policy that works.
 | Path | Contains |
 | --- | --- |
 | `config.toml` | allowlists, routes, paths, and possibly credentials |
-| `~/.relay/SOUL.md` | assistant identity and private stable context |
+| `<assistant_root>/` | Git-versioned `SOUL.md`, durable context, and installed jobs |
 | `~/.relay/state.json` | channel cursors and backend session IDs |
 | `~/.relay/relay.db` | conversation history, approvals, and job runs |
 | `~/.relay/audit.jsonl` | metadata, errors, handles, and optional content |
 | `~/.relay/sessions/` | per-thread backend workspaces |
-| `~/.relay/jobs/` | active unattended runbooks |
 | `~/.relay/drafts/` | inactive agent-authored proposals |
 
 Keep them on local durable storage with permissions restricted to the service
-user. Never commit real config, state, audit logs, session workspaces, or
-assistant identity.
+user. Keep the assistant directory in its own private Git repository. Never
+put real config secrets, state, audit logs, session workspaces, or databases in
+that repository. An explicit `assistant_root` config stored inside it cannot
+contain an inline Telegram token; use `telegram.bot_token_env` or move the
+config outside.
 
 ## Network exposure
 

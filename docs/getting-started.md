@@ -56,18 +56,18 @@ cargo build --locked --release
 install -m 755 target/release/relay ~/.local/bin/relay
 ```
 
-## 3. Create local files
+## 3. Create your assistant repository
 
 ```sh
-mkdir -p ~/.config/relay ~/.relay
-curl -fsSL \
-  https://raw.githubusercontent.com/edheltzel/relay/main/assistant/SOUL.example.md \
-  -o ~/.relay/SOUL.md
+mkdir -p ~/.config/relay
+relay init ~/Code/assistant --config ~/.config/relay/config.toml
 ```
 
-`SOUL.md` is optional, but it is the best place to define the assistant's
-identity, communication style, and stable operating rules. Relay reads it for
-every run and never rewrites it.
+Relay creates one Git-versioned repository containing `SOUL.md`, `AGENTS.md`,
+`README.md`, `context/`, and an empty `jobs/`. It records the canonical root in
+the selected config file. Edit `SOUL.md` to define identity and operating style,
+then add durable user context under `context/`. Relay reads these files at run
+time and never writes machine-specific paths into the repository.
 
 ## 4. Configure a channel
 
@@ -79,6 +79,7 @@ every run and never rewrites it.
     ```toml
     channel = "telegram"
     agent = "codex"
+    assistant_root = "~/Code/assistant"
 
     [telegram]
     allow_user_ids = [123456789]
@@ -101,6 +102,7 @@ every run and never rewrites it.
     ```toml
     channel = "imessage"
     agent = "codex"
+    assistant_root = "~/Code/assistant"
 
     [imessage]
     self_handles = ["you@icloud.com"]
@@ -112,6 +114,11 @@ every run and never rewrites it.
     and filtering behavior.
 
 Replace `codex` with `claude` if Claude Code is your backend.
+
+If you replace the config file created by `relay init`, keep its
+`assistant_root` setting. Running the same init command again is safe for a
+complete assistant repository and restores the setting without overwriting
+user files.
 
 ## 5. Validate and run
 

@@ -73,10 +73,11 @@ Relay: filter → route → persist → schedule → deliver
 Claude Code or Codex: reason → use tools → produce result
 ```
 
-Relay owns channels, identity, history, job state, approvals, and delivery. The
-selected backend owns models, tools, MCP servers, skills, and repository
-context. That boundary keeps Relay small and lets the backend change without
-rebuilding your assistant.
+You own one Git-versioned assistant repository containing identity, context,
+and jobs. Relay owns channels, history, scheduling, approvals, security, and
+delivery. The selected backend owns models, tools, MCP servers, skills, and
+authentication. That boundary keeps Relay small and lets the backend change
+without rebuilding your assistant.
 
 ## Documentation map
 

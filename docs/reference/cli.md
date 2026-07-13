@@ -6,6 +6,7 @@ The default is `config.toml` in the current directory.
 
 | Command | Purpose |
 | --- | --- |
+| `relay init [path]` | Create and Git-initialize the one assistant repository; defaults to `./assistant` |
 | `relay` | Start the configured channel gateway and scheduler |
 | `relay doctor` | Validate config, paths, channel requirements, and required backend binaries |
 | `relay job validate` | Validate every installed job; exits non-zero if any are invalid |
@@ -17,6 +18,7 @@ The default is `config.toml` in the current directory.
 Examples:
 
 ```sh
+relay init ~/Code/assistant --config ~/.config/relay/config.toml
 relay doctor --config ~/.config/relay/config.toml
 relay --config ~/.config/relay/config.toml
 relay job validate --config ~/.config/relay/config.toml
@@ -26,6 +28,11 @@ relay job runs repo-review --config ~/.config/relay/config.toml
 
 Unknown commands and missing values fail with the accepted command forms. The
 CLI does not currently provide shell completion or a generated `--help` page.
+
+`relay init` accepts an empty target, the selected config by itself, or a
+complete existing assistant layout. It refuses unrelated and partial non-empty
+directories, never overwrites an existing assistant file, persists one
+canonical `assistant_root`, and initializes Git when needed.
 
 ## Commands sent in chat
 
