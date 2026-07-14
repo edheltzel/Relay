@@ -15,10 +15,10 @@ You need:
 - `curl` and `tar` for the release installer
 
 Relay uses the backend's existing login, settings, tools, MCP servers, skills,
-and backend configuration. Each chat runs from a Relay-owned per-thread
-directory under `sessions_dir`, not the shell directory that launched Relay.
-Use absolute paths when you want the agent to inspect a repository elsewhere.
-Confirm the selected command works before starting Relay:
+and backend configuration. Each chat runs from `assistant_root`, so the backend
+can discover project instructions such as `AGENTS.md` and work with the
+assistant's context directly. Confirm the selected command works before
+starting Relay:
 
 === "Codex"
 
