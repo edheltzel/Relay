@@ -69,8 +69,7 @@ install -m 755 target/release/relay ~/.local/bin/relay
 ## 3. Create your assistant repository
 
 ```sh
-mkdir -p ~/.config/relay
-relay init ~/Code/assistant --config ~/.config/relay/config.toml
+relay init ~/Code/assistant
 ```
 
 Relay creates one Git-versioned repository containing `SOUL.md`, `AGENTS.md`,
@@ -84,7 +83,7 @@ time and never writes machine-specific paths into the repository.
 === "Telegram"
 
     Create a bot with Telegram's `@BotFather`, send it one message, and find
-    your stable numeric user ID. Then create `~/.config/relay/config.toml`:
+    your stable numeric user ID. Then edit `~/.relay/config.toml`:
 
     ```toml
     channel = "telegram"
@@ -107,7 +106,7 @@ time and never writes machine-specific paths into the repository.
 === "iMessage"
 
     Give the terminal or service host Full Disk Access in macOS System
-    Settings, then create `~/.config/relay/config.toml`:
+    Settings, then edit `~/.relay/config.toml`:
 
     ```toml
     channel = "imessage"
@@ -134,8 +133,8 @@ user files.
 ## 5. Validate and run
 
 ```sh
-relay doctor --config ~/.config/relay/config.toml
-relay --config ~/.config/relay/config.toml
+relay doctor
+relay
 ```
 
 Send a new message after the gateway starts. Telegram deliberately discards

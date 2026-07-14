@@ -42,9 +42,9 @@ root, Relay config, sessions, state, database, audit, drafts, or lock paths.
 ## Validate and inspect jobs
 
 ```sh
-relay job validate --config ~/.config/relay/config.toml
-relay job list --config ~/.config/relay/config.toml
-relay job show repo-review --config ~/.config/relay/config.toml
+relay job validate
+relay job list
+relay job show repo-review
 ```
 
 Validation reports every valid and invalid file. An invalid job is disabled
@@ -53,8 +53,8 @@ individually and does not stop messaging or other valid jobs.
 ## Run a job manually
 
 ```sh
-relay job run repo-review --config ~/.config/relay/config.toml
-relay job runs repo-review --config ~/.config/relay/config.toml
+relay job run repo-review
+relay job runs repo-review
 ```
 
 A manual run executes in the invoking CLI process and prints its result there.

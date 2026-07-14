@@ -10,7 +10,7 @@
   <array>
     <string>/Users/YOU/.local/bin/relay</string>
     <string>--config</string>
-    <string>/Users/YOU/.config/relay/config.toml</string>
+    <string>/Users/YOU/.relay/config.toml</string>
   </array>
 
   <key>WorkingDirectory</key>

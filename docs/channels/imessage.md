@@ -93,7 +93,7 @@ Grant Full Disk Access to the exact terminal or service host, restart that
 process, and rerun:
 
 ```sh
-relay doctor --config ~/.config/relay/config.toml
+relay doctor
 ```
 
 ### Messages are ignored
