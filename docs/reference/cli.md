@@ -2,7 +2,7 @@
 
 Relay has one gateway command, one diagnostic command, and a small set of job
 commands. All commands accept `--config <path>` anywhere in the argument list.
-The default is `config.toml` in the current directory.
+The default is `~/.relay/config.toml`.
 
 | Command | Purpose |
 | --- | --- |
@@ -18,12 +18,12 @@ The default is `config.toml` in the current directory.
 Examples:
 
 ```sh
-relay init ~/Code/assistant --config ~/.config/relay/config.toml
-relay doctor --config ~/.config/relay/config.toml
-relay --config ~/.config/relay/config.toml
-relay job validate --config ~/.config/relay/config.toml
-relay --config ~/.config/relay/config.toml job run repo-review
-relay job runs repo-review --config ~/.config/relay/config.toml
+relay init ~/Code/assistant
+relay doctor
+relay
+relay job validate
+relay job run repo-review
+relay job runs repo-review
 ```
 
 Unknown commands and missing values fail with the accepted command forms. The

@@ -12,10 +12,9 @@ Build or install `relay`, then run doctor from the same user account that will
 own the service:
 
 ```sh
-mkdir -p ~/.config/relay ~/.relay
-# Copy config.toml.example to ~/.config/relay/config.toml and edit channel settings.
-relay init ~/Code/assistant --config ~/.config/relay/config.toml
-relay doctor --config /Users/YOU/.config/relay/config.toml
+relay init ~/Code/assistant
+# Edit ~/.relay/config.toml with your channel settings.
+relay doctor
 ```
 
 Use absolute paths in service files. The service user needs:
@@ -70,7 +69,7 @@ and replace `YOU` with your macOS user name:
   <array>
     <string>/Users/YOU/.local/bin/relay</string>
     <string>--config</string>
-    <string>/Users/YOU/.config/relay/config.toml</string>
+    <string>/Users/YOU/.relay/config.toml</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -135,7 +134,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/relay --config %h/.config/relay/config.toml
+ExecStart=%h/.local/bin/relay --config %h/.relay/config.toml
 WorkingDirectory=%h/.relay
 Restart=on-failure
 RestartSec=10

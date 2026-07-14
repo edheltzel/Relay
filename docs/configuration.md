@@ -1,11 +1,11 @@
 # Configuration
 
-Relay reads TOML from `config.toml` by default. Pass `--config <path>` to every
-gateway, doctor, or job command when the file lives elsewhere.
+Relay reads TOML from `~/.relay/config.toml` by default. Pass `--config <path>`
+to use a different file for a gateway, doctor, init, or job command.
 
 ```sh
-relay doctor --config ~/.config/relay/config.toml
-relay --config ~/.config/relay/config.toml
+relay doctor
+relay
 ```
 
 Paths beginning with `~` are expanded. Invalid values, unknown fields inside
@@ -16,7 +16,7 @@ Create the one assistant repository and persist its root before editing the
 rest of the config:
 
 ```sh
-relay init ~/Code/assistant --config ~/.config/relay/config.toml
+relay init ~/Code/assistant
 ```
 
 Relay derives `SOUL.md`, `context/`, and `jobs/` from `assistant_root`. At run
