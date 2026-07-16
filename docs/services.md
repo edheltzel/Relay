@@ -104,6 +104,12 @@ launchctl print gui/$(id -u)/com.edheltzel.relay
 tail -f ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
 ```
 
+After editing `~/.relay/config.toml`, restart the gateway with:
+
+```sh
+relay restart
+```
+
 After changing the plist:
 
 ```sh
@@ -156,6 +162,12 @@ systemctl --user daemon-reload
 systemctl --user enable --now relay.service
 systemctl --user status relay.service
 journalctl --user -u relay.service -f
+```
+
+After editing `~/.relay/config.toml`, restart the gateway with:
+
+```sh
+relay restart
 ```
 
 For voice support, prefer `voice.openai_api_key` in `~/.relay/config.toml`. As an

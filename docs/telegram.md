@@ -60,21 +60,16 @@ voice transcription and spoken replies:
 openai_api_key = "your-api-key"
 ```
 
-Validate the config, then restart the one existing Relay process:
+Restart the managed gateway to load the updated config:
 
 ```sh
-relay doctor
+relay restart
 ```
 
-For a foreground process, stop it and run `relay` again. For launchd, use:
-
-```sh
-launchctl kickstart -k gui/$(id -u)/com.edheltzel.relay
-```
-
-See [Running Relay as a Service](services.md) for the full launchd and systemd
-restart commands. Do not start a foreground gateway while the service is
-running because Telegram permits only one poller for a bot token.
+For a foreground process, stop it, run `relay doctor`, and run `relay` again.
+See [Running Relay as a Service](services.md) for launchd and systemd setup. Do
+not start a foreground gateway while the service is running because Telegram
+permits only one poller for a bot token.
 
 `OPENAI_API_KEY` remains available for CI and service secret injection. A
 non-empty environment value overrides the configured key.

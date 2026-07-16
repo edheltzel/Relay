@@ -9,6 +9,7 @@ The default is `~/.relay/config.toml`.
 | `relay init [path]` | Create and Git-initialize the one assistant repository; defaults to `./assistant` |
 | `relay` | Start the configured channel gateway and scheduler |
 | `relay doctor` | Validate config, paths, channel requirements, and required backend binaries |
+| `relay restart` | Restart the managed gateway to load updated config |
 | `relay job validate` | Validate every installed job; exits non-zero if any are invalid |
 | `relay job list` | List valid and invalid jobs with backend or error |
 | `relay job show <name>` | Print the parsed installed job |
@@ -21,6 +22,7 @@ Examples:
 relay init ~/Code/assistant
 relay doctor
 relay
+relay restart
 relay job validate
 relay job run repo-review
 relay job runs repo-review
@@ -28,6 +30,13 @@ relay job runs repo-review
 
 Unknown commands and missing values fail with the accepted command forms. The
 CLI does not currently provide shell completion or a generated `--help` page.
+
+`relay restart` targets the service definitions documented by Relay:
+`com.edheltzel.push` under launchd on macOS and the `relay.service` user unit
+under systemd on Linux. The service definition controls its config path,
+environment, and executable; `--config` does not override the service definition
+for this command. Run `relay doctor` separately when you want to validate those
+settings from the current shell.
 
 `relay init` accepts an empty target, the selected config by itself, or a
 complete existing assistant layout. It refuses unrelated and partial non-empty
