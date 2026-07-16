@@ -6,6 +6,7 @@ The default is `~/.relay/config.toml`.
 
 | Command | Purpose |
 | --- | --- |
+| `relay help`, `relay --help` | Print command and option help without loading config or changing files |
 | `relay init [path]` | Create and Git-initialize the one assistant repository; defaults to `./assistant` |
 | `relay` | Start the configured channel gateway and scheduler |
 | `relay doctor` | Validate config, paths, channel requirements, and required backend binaries |
@@ -20,6 +21,7 @@ Examples:
 
 ```sh
 relay init ~/Code/assistant
+relay help
 relay doctor
 relay
 relay restart
@@ -29,7 +31,7 @@ relay job runs repo-review
 ```
 
 Unknown commands and missing values fail with the accepted command forms. The
-CLI does not currently provide shell completion or a generated `--help` page.
+CLI does not currently provide shell completion.
 
 `relay restart` targets the service definitions documented by Relay:
 `com.edheltzel.push` under launchd on macOS and the `relay.service` user unit
