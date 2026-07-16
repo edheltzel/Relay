@@ -180,7 +180,7 @@ fn restart_invokes_the_platform_service_manager() {
     let manager_path = bin_dir.join(manager);
     std::fs::write(
         &manager_path,
-        format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {:?}\n", args_path),
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RELAY_RESTART_ARGS_PATH\"\n",
     )
     .unwrap();
     let mut permissions = std::fs::metadata(&manager_path).unwrap().permissions();
@@ -196,6 +196,7 @@ fn restart_invokes_the_platform_service_manager() {
     let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .arg("restart")
         .env("PATH", path)
+        .env("RELAY_RESTART_ARGS_PATH", &args_path)
         .output()
         .unwrap();
 
