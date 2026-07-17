@@ -38,8 +38,8 @@ agent = "claude"
 ```
 
 `relay init` creates a new config with owner-only mode `0600` on Unix. An
-environment variable remains supported through `telegram.bot_token_env`, which
-defaults to `TELEGRAM_BOT_TOKEN`. Relay never prints the token. Run:
+environment variable remains supported through `TELEGRAM_BOT_TOKEN`. Relay never
+prints the token. Run:
 
 ```sh
 relay doctor --config /absolute/path/to/config.toml
