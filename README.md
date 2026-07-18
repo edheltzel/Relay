@@ -64,7 +64,7 @@ Relay keeps conversations, run history, schedules, and delivery routes durable.
   [Pi](https://pi.dev/) installed, authenticated, and runnable by the user that
   will run Relay
 - Git for the assistant repository created by `relay init`
-- `curl` and `tar` for the release installer
+- `curl`, `tar`, and either `shasum` or `sha256sum` for the release installer
 
 First confirm that your chosen backend works. For example:
 
@@ -146,6 +146,7 @@ Chat commands:
 | Message | Effect |
 | --- | --- |
 | `/clear`, `/new`, `/reset` | Start a fresh backend session for this conversation |
+| `/stop` | Stop the active request; queued messages continue in order |
 | `/help` | Show available chat commands |
 
 Jobs are Markdown runbooks stored in the assistant repository. Common commands
