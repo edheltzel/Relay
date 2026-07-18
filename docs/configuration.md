@@ -21,7 +21,7 @@ relay init ~/Code/assistant
 
 For a new file, init writes a private, owner-only Telegram and Codex starting
 point with empty `telegram.bot_token` and `telegram.allow_user_ids` values.
-Fill both in before running Relay. Relay derives `SOUL.md`, `context/`, and `jobs/` from
+Fill both in before running Relay. Relay derives `SOUL.md`, `context/`, `evals/`, and `jobs/` from
 `assistant_root`. At run time it appends their resolved absolute locations to
 the user-owned `SOUL.md` instructions in memory. It does not write machine
 paths into the repository.
@@ -185,7 +185,7 @@ the selected agent and review [permissions and security](security.md).
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `assistant_root` | required for new setups | Canonical root of the one assistant repository; `SOUL.md`, `context/`, and `jobs/` are derived |
+| `assistant_root` | required for new setups | Canonical root of the one assistant repository; `SOUL.md`, `context/`, `evals/`, and `jobs/` are derived |
 | `state_path` | `~/.relay/state.json` | Channel cursors and backend session IDs |
 | `database_path` | `~/.relay/relay.db` | Canonical conversation, approval, and job history |
 | `audit_log_path` | `~/.relay/audit.jsonl` | Structured local audit log |
