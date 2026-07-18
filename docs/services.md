@@ -107,7 +107,7 @@ tail -f ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
 After editing `~/.relay/config.toml`, restart the gateway with:
 
 ```sh
-relay restart
+relay reload
 ```
 
 After changing the plist:
@@ -167,7 +167,7 @@ journalctl --user -u relay.service -f
 After editing `~/.relay/config.toml`, restart the gateway with:
 
 ```sh
-relay restart
+relay reload
 ```
 
 For voice support, prefer `voice.openai_api_key` in `~/.relay/config.toml`. As an
