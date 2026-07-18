@@ -7,10 +7,11 @@ The default is `~/.relay/config.toml`.
 | Command | Purpose |
 | --- | --- |
 | `relay help`, `relay --help` | Print command and option help without loading config or changing files |
+| `relay version`, `relay --version`, `relay -V` | Print the installed Relay version without starting the gateway |
 | `relay init [path]` | Create and Git-initialize the one assistant repository; defaults to `./assistant` |
 | `relay` | Start the configured channel gateway and scheduler |
 | `relay doctor` | Validate config, paths, channel requirements, and required backend binaries |
-| `relay restart` | Restart the managed gateway to load updated config |
+| `relay reload`, `relay restart` | Restart the managed gateway to load updated config |
 | `relay job validate` | Validate every installed job; exits non-zero if any are invalid |
 | `relay job list` | List valid and invalid jobs with backend or error |
 | `relay job show <name>` | Print the parsed installed job |
@@ -22,9 +23,10 @@ Examples:
 ```sh
 relay init ~/Code/assistant
 relay help
+relay version
 relay doctor
 relay
-relay restart
+relay reload
 relay job validate
 relay job run repo-review
 relay job runs repo-review
@@ -33,7 +35,7 @@ relay job runs repo-review
 Unknown commands and missing values fail with the accepted command forms. The
 CLI does not currently provide shell completion.
 
-`relay restart` targets the service definitions documented by Relay:
+`relay reload` and its `relay restart` alias target the service definitions documented by Relay:
 `com.edheltzel.push` under launchd on macOS and the `relay.service` user unit
 under systemd on Linux. The service definition controls its config path,
 environment, and executable; `--config` does not override the service definition
