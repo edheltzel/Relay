@@ -45,7 +45,7 @@ This Git repository contains the durable, user-owned parts of one Relay assistan
 - `evals/` contains reusable agent evaluation criteria.
 - `jobs/` contains installed Relay job runbooks.
 
-Relay owns channels, scheduling, history, security, approvals, and delivery outside this repository. The configured agent runtime owns reasoning, tools, skills, MCP servers, and authentication.
+Relay owns channels, scheduling, history, security, approvals, and delivery outside this repository. Project skills may live here, while the configured agent runtime owns discovery, execution, permissions, global skills, MCP servers, and authentication.
 "#;
 
 const CONTEXT_README: &str = r#"# Context
