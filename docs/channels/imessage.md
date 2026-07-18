@@ -52,7 +52,7 @@ can ask the agent to use any capability allowed by that agent's configuration.
 - tapbacks and Messages system rows
 - blank messages
 - messages from handles outside the allowlist
-- Relay's own replies containing the configured marker
+- Relay's own replies containing the built-in Relay reply marker
 
 The channel expects a recent macOS Messages schema. `relay doctor` and runtime
 logs report database access or query failures rather than silently accepting
@@ -72,6 +72,10 @@ agent = "claude"
 See [configuration](../configuration.md#routing) for route precedence.
 
 ## Restart behavior
+
+On the first iMessage start, Relay records the newest existing Messages row
+without running it. Send a new message after the gateway starts. Later starts
+continue after the last completed row stored in `state.json`.
 
 Relay stores the last completed Messages row in `state.json` and accepted
 conversation turns in `relay.db`. It advances the cursor only after a row is
