@@ -304,10 +304,35 @@ pre {
   font-weight: 650;
 }
 
+.relay-demo,
+.relay-outcomes {
+  margin: 0 0 clamp(4rem, 8vw, 6.5rem);
+}
+
+.relay-section-heading {
+  max-width: 43rem;
+  margin: 0 auto 2.25rem;
+  text-align: center;
+}
+
+.relay-section-heading > p:first-child,
+.relay-outcomes > p:first-child {
+  margin: 0;
+}
+
+.relay-section-heading > p:last-child {
+  max-width: 36rem;
+  margin-inline: auto;
+  color: var(--relay-muted);
+  font-size: 0.9rem;
+}
+
 .relay-paths {
   margin: 0 0 5rem;
 }
 
+.relay-demo h2,
+.relay-outcomes > h2,
 .relay-paths > h2,
 .relay-model > h2,
 .relay-doc-map > h2 {
@@ -316,6 +341,140 @@ pre {
   font-weight: 400;
   letter-spacing: -0.045em;
   line-height: 1;
+}
+
+.relay-chat {
+  max-width: 48rem;
+  margin-inline: auto;
+  overflow: hidden;
+  background: var(--relay-surface);
+  border: 1px solid var(--relay-line-strong);
+  border-radius: 0.65rem;
+  box-shadow: 0 1.5rem 4rem rgb(41 42 37 / 7%);
+}
+
+.relay-chat-bar,
+.relay-chat-footer,
+.relay-chat-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--relay-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+}
+
+.relay-chat-bar {
+  min-height: 2.6rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--relay-line);
+}
+
+.relay-chat-bar span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.relay-chat-bar i {
+  width: 0.42rem;
+  height: 0.42rem;
+  background: var(--relay-moss);
+  border-radius: 50%;
+}
+
+.relay-chat-body {
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.relay-chat-message {
+  width: fit-content;
+  max-width: min(78%, 34rem);
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--relay-line);
+  border-radius: 0.55rem;
+}
+
+.relay-chat-message > span {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--relay-moss);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.65rem;
+}
+
+.relay-chat-message p {
+  margin: 0;
+  color: var(--relay-ink);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.relay-chat-message--user {
+  margin-left: auto;
+  background: var(--relay-moss-soft);
+  border-color: color-mix(in srgb, var(--relay-moss) 28%, var(--relay-line));
+}
+
+.relay-chat-message--assistant {
+  background: var(--relay-paper);
+}
+
+.relay-chat-status {
+  margin: 1.25rem 0;
+  padding: 0.55rem 0.75rem;
+  border-left: 2px solid var(--relay-moss);
+  background: color-mix(in srgb, var(--relay-moss-soft) 55%, transparent);
+}
+
+.relay-chat-footer {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  background: color-mix(in srgb, var(--relay-moss-soft) 40%, transparent);
+  border-top: 1px solid var(--relay-line);
+}
+
+.relay-outcomes > h2 {
+  max-width: 16ch;
+  margin-bottom: 2rem;
+}
+
+.relay-use-cases {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-block: 1px solid var(--relay-line);
+}
+
+.relay-use-cases article {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.relay-use-cases article:nth-child(even) {
+  border-left: 1px solid var(--relay-line);
+}
+
+.relay-use-cases article:nth-child(n + 3) {
+  border-top: 1px solid var(--relay-line);
+}
+
+.relay-use-cases article > span,
+.relay-steps > div > span {
+  color: var(--relay-moss);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+}
+
+.relay-use-cases h3 {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.relay-use-cases p {
+  margin: 0;
+  color: var(--relay-muted);
+  font-size: 0.78rem;
 }
 
 .md-typeset .grid.cards {
@@ -364,9 +523,42 @@ pre {
   color: var(--relay-muted);
 }
 
-.relay-model pre {
-  max-width: 48rem;
-  margin: 1.75rem 0;
+.relay-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 2rem 0;
+  border-block: 1px solid var(--relay-line);
+}
+
+.relay-steps > div {
+  padding: 1.5rem 1.5rem 1.5rem 0;
+}
+
+.relay-steps > div + div {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--relay-line);
+}
+
+.relay-steps strong {
+  display: block;
+  margin: 0.65rem 0 0.35rem;
+  color: var(--relay-ink);
+  font-size: 0.82rem;
+}
+
+.relay-steps p {
+  margin: 0;
+  color: var(--relay-muted);
+  font-size: 0.74rem;
+}
+
+.md-typeset .relay-inline-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  color: var(--relay-ink);
+  font-weight: 650;
+  text-decoration: none;
+  border-bottom: 1px solid var(--relay-line-strong);
 }
 
 .relay-doc-map {
@@ -418,6 +610,33 @@ pre {
   .md-typeset .grid.cards,
   .md-typeset .grid.cards > ul {
     grid-template-columns: 1fr;
+  }
+
+  .relay-use-cases,
+  .relay-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .relay-use-cases article:nth-child(even) {
+    border-left: 0;
+  }
+
+  .relay-use-cases article:nth-child(n + 2) {
+    border-top: 1px solid var(--relay-line);
+  }
+
+  .relay-steps > div {
+    padding: 1.25rem 0;
+  }
+
+  .relay-steps > div + div {
+    padding-left: 0;
+    border-top: 1px solid var(--relay-line);
+    border-left: 0;
+  }
+
+  .relay-chat-message {
+    max-width: 92%;
   }
 
   .md-typeset ul.relay-signals li + li {
