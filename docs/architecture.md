@@ -414,9 +414,10 @@ the trust boundary. iMessage uses `imessage.self_handles` and
 and `telegram.allow_chat_ids`; Slack uses stable `slack.allow_user_ids` member
 IDs and verifies the authenticated workspace.
 
-Relay does not override sandbox, approval, permission-mode, or tool-list settings.
-Chats and jobs use the selected agent's own configuration and must use work
-directories that do not overlap Relay-owned state or configuration.
+Relay preserves sandbox, approval, permission-mode, and tool-list settings for
+chats. Codex and Claude jobs bypass interactive permissions so unattended work
+can complete. Every job must use a work directory that does not overlap
+Relay-owned state or configuration.
 
 ## Roadmap
 
