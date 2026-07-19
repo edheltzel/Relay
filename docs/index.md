@@ -10,9 +10,8 @@ hide:
 
 # Your coding agent, always within reach.
 
-Relay turns Claude Code, Codex, or Pi into a personal assistant you can message
-and schedule. It runs on your machine, keeps durable state, and returns results
-to iMessage, Telegram, or Slack.
+Message and schedule Claude Code, Codex, or Pi from iMessage, Telegram, or
+Slack, with durable state on your machine.
 
 <p class="relay-actions">
   <a class="md-button md-button--primary" href="getting-started/">Get started</a>
