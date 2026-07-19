@@ -1,7 +1,6 @@
 +++
 version = 1
 timeout = "10m"
-workdir = "~/.relay/workspaces/daily-inbox-triage"
 
 [[triggers]]
 id = "weekday-morning"
