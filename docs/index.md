@@ -8,16 +8,29 @@ hide:
 
 <span class="relay-kicker">Always-on assistant infrastructure</span>
 
-# Put your coding agent on call.
+# Your coding agent, always within reach.
 
-Relay turns Claude Code, Codex, or Pi into a personal assistant you can message and
-schedule. It runs on your machine, keeps durable state, and sends results back
-to iMessage, Telegram, or Slack.
+Message and schedule Claude Code, Codex, or Pi from iMessage, Telegram, or
+Slack, with durable state on your machine.
 
-[Get started](getting-started.md){ .md-button .md-button--primary }
-[See the architecture](architecture.md){ .md-button }
+<p class="relay-actions">
+  <a class="md-button md-button--primary" href="getting-started/">Get started</a>
+  <a class="md-button" href="architecture/">See how it works&nbsp; →</a>
+</p>
+
+<p class="relay-install">curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/main/install.sh | sh</p>
+
+<ul class="relay-signals">
+  <li><strong>One small binary</strong>No new agent runtime</li>
+  <li><strong>Your machine</strong>State stays under your control</li>
+  <li><strong>No inbound port</strong>Private by default</li>
+</ul>
 
 </div>
+
+<section class="relay-paths" markdown>
+
+<span class="relay-section-label">Start here</span>
 
 ## Choose a path
 
@@ -36,8 +49,8 @@ to iMessage, Telegram, or Slack.
 
     ---
 
-    Set up private [iMessage](channels/imessage.md) or
-    [Telegram](telegram.md), or [Slack](slack.md) conversations with narrow sender allowlists.
+    Set up private [iMessage](channels/imessage.md), [Telegram](telegram.md), or
+    [Slack](slack.md) conversations with narrow sender allowlists.
 
     [:octicons-arrow-right-24: Configure channels](configuration.md#channels)
 
@@ -61,9 +74,13 @@ to iMessage, Telegram, or Slack.
 
 </div>
 
-## The mental model
+</section>
 
-Relay is a gateway, not an agent runtime:
+<section class="relay-model" markdown>
+
+<span class="relay-section-label">The mental model</span>
+
+## A gateway, not another agent.
 
 ```text
 message or cron trigger
@@ -79,7 +96,13 @@ delivery. The selected backend owns models, tools, MCP servers, skills, and
 authentication. That boundary keeps Relay small and lets the backend change
 without rebuilding your assistant.
 
-## Documentation map
+</section>
+
+<section class="relay-doc-map" markdown>
+
+<span class="relay-section-label">Documentation</span>
+
+## Find what you need
 
 | If you need to… | Read… |
 | --- | --- |
@@ -96,3 +119,5 @@ without rebuilding your assistant.
     These pages are generated directly from the Markdown in the repository's
     `docs/` directory. If the site and source ever disagree, update the
     Markdown source and rebuild the site.
+
+</section>
