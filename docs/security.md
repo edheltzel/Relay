@@ -52,7 +52,7 @@ service environment using the narrowest policy that works.
 | Path | Contains |
 | --- | --- |
 | `config.toml` | allowlists, routes, paths, and possibly credentials |
-| `<assistant_root>/` | Git-versioned `SOUL.md`, durable context, evals, and installed jobs |
+| `<assistant_root>/` | Git-versioned identity, context, evals, jobs, and optional project skills |
 | `~/.relay/state.json` | channel cursors and backend session IDs |
 | `~/.relay/relay.db` | conversation history, approvals, and job runs |
 | `~/.relay/audit.jsonl` | metadata, errors, handles, and optional content |

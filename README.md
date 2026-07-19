@@ -85,6 +85,10 @@ Create a Git-backed home for your assistant:
 relay init ~/Code/assistant
 ```
 
+This creates a Git repository containing `SOUL.md`, shared instructions in
+`AGENTS.md`, a `CLAUDE.md` reference to those instructions, `context/`, `evals/`,
+and `jobs/`, then records its path in `~/.relay/config.toml`.
+
 Edit `~/.relay/config.toml` to connect a chat channel. A small Telegram setup
 looks like this:
 
@@ -105,8 +109,9 @@ relay doctor
 relay
 ```
 
-For channel setup, service installation, jobs, permissions, and every config
-option, follow the [developer docs](https://edheltzel.github.io/relay/).
+For channel setup, assistant design, service installation, jobs, permissions,
+and every config option, follow the
+[developer docs](https://edheltzel.github.io/relay/).
 
 ## Build from source
 
