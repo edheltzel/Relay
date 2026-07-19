@@ -2,7 +2,7 @@
 
 # Relay
 
-### Put your coding agent on call.
+### Turn your coding agent into a 24/7 personal assistant.
 
 Message Claude Code, Codex, or Pi from your phone. Schedule work for later.
 Keep the agent and its data on your own machine.
@@ -21,19 +21,39 @@ Good coding agents should be useful beyond an open terminal.
 
 Relay makes the agent you already trust available through iMessage, Telegram,
 or Slack. It can answer a message, continue a conversation, or run a Markdown
-job on a schedule. Your assistant files stay in a Git repository you own.
+job on a schedule. Give it clear context and a useful set of jobs, and it can
+act as your AI chief of staff. Your assistant files stay in a Git repository
+you own.
 
 Relay is a small bridge, not a new agent. Your coding agent still controls the
 models, tools, permissions, and reasoning.
 
-```text
-message or scheduled job
-          ↓
-        Relay
-          ↓
-Claude Code, Codex, or Pi
-          ↓
-    reply to your chat
+## A simpler alternative
+
+[OpenClaw](https://github.com/openclaw/openclaw) and
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) are powerful
+assistant platforms with their own agent runtimes, tools, skills, memory, and
+messaging layers.
+
+Relay does not replace your agent. One small Rust binary adds messaging and
+schedules to Claude Code, Codex, or Pi.
+
+## How it works
+
+```mermaid
+flowchart TD
+    Message["Message from you<br/>iMessage · Telegram · Slack"]
+    Jobs["Scheduled<br/>Markdown jobs"]
+    Repo["Assistant repository<br/>SOUL.md · context · jobs"]
+    Relay["Relay<br/>message gateway · scheduler · history"]
+    Agent["Your coding agent<br/>Claude Code · Codex · Pi"]
+    Reply["Relay returns the result<br/>to your chat"]
+
+    Message --> Relay
+    Jobs --> Relay
+    Relay -->|dispatch| Agent
+    Repo -. context .-> Agent
+    Agent --> Reply
 ```
 
 ## What it does
