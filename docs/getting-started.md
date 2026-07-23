@@ -44,7 +44,7 @@ before starting Relay:
 On Apple Silicon macOS or x86_64 Linux, install the latest prebuilt release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh
 ```
 
 The installer verifies the archive against its published SHA-256 checksum

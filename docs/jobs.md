@@ -148,7 +148,7 @@ during job validation.
 
 ## Complete assistant example
 
-The [daily inbox triage job](https://github.com/edheltzel/relay/blob/main/examples/assistant/jobs/daily-inbox-triage.md)
+The [daily inbox triage job](https://github.com/edheltzel/relay/blob/master/examples/assistant/jobs/daily-inbox-triage.md)
 keeps global identity separate while making the scheduled runbook self-contained:
 
 ```text

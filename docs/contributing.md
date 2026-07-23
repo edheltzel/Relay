@@ -60,7 +60,7 @@ Run the CI-equivalent build before submitting documentation changes:
 mkdocs build --strict
 ```
 
-The GitHub Pages workflow rebuilds from `docs/` after changes land on `main`.
+CI rebuilds the documentation from `docs/` after changes land on `master`.
 Keep each fact on one canonical page and link to it elsewhere. The README is a
 product overview, not a second configuration manual.
 

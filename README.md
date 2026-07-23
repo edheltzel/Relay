@@ -8,20 +8,16 @@ Message Claude Code, Codex, or Pi from your phone. Schedule work for later.
 Keep the agent and its data on your own machine.
 
 [![CI](https://github.com/edheltzel/relay/actions/workflows/ci.yml/badge.svg)](https://github.com/edheltzel/relay/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-read-12756f)](https://edheltzel.github.io/relay/)
+[![Docs](https://img.shields.io/badge/docs-read-12756f)](docs/index.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111417)](LICENSE)
 
-[Get started](#get-started) · [Read the docs](https://edheltzel.github.io/relay/) · [View releases](https://github.com/edheltzel/relay/releases)
+[Get started](#get-started) · [Read the docs](docs/index.md) · [View releases](https://github.com/edheltzel/relay/releases)
 
 </div>
 
-## Website
-
-https://relayassistant.com/
-
 ## Examples
 
-Email triage: https://github.com/edheltzel/relay/blob/main/examples/assistant/jobs/daily-inbox-triage.md
+Email triage: https://github.com/edheltzel/relay/blob/master/examples/assistant/jobs/daily-inbox-triage.md
 
 ## The mission
 
@@ -81,7 +77,7 @@ agent installed and signed in. iMessage requires macOS.
 Install the latest release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh
 ```
 
 The binary goes to `~/.local/bin`. If your shell cannot find `relay`, add that
@@ -119,7 +115,7 @@ relay
 
 For channel setup, assistant design, service installation, jobs, permissions,
 and every config option, follow the
-[developer docs](https://edheltzel.github.io/relay/).
+[developer docs](docs/index.md).
 
 ## Build from source
 

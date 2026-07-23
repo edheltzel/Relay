@@ -1,5 +1,5 @@
 [Unit]
-Description=relay personal assistant gateway
+Description=Relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 

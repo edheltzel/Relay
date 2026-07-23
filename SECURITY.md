@@ -3,7 +3,7 @@
 ## Supported versions
 
 Relay is early software. Security fixes are made on the latest release and the
-`main` branch. Older releases may not receive fixes.
+`master` branch. Older releases may not receive fixes.
 
 ## Report a vulnerability
 

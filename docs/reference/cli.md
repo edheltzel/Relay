@@ -38,7 +38,7 @@ subcommands. A `--help` flag anywhere in the argument list prints the global
 help shown by `relay --help`.
 
 `relay reload` and its `relay restart` alias target the service definitions documented by Relay:
-`com.edheltzel.push` under launchd on macOS and the `relay.service` user unit
+`com.edheltzel.relay` under launchd on macOS and the `relay.service` user unit
 under systemd on Linux. The service definition controls its config path,
 environment, and executable; `--config` does not override the service definition
 for this command. Run `relay doctor` separately when you want to validate those

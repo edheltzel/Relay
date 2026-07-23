@@ -19,7 +19,7 @@ handle work in the background.
   <a class="md-button" href="#what-can-it-do">What it can do&nbsp; ↓</a>
 </p>
 
-<p class="relay-install">curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/main/install.sh | sh</p>
+<p class="relay-install">curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh</p>
 
 <ul class="relay-signals">
   <li><strong>One small binary</strong>No new agent runtime</li>

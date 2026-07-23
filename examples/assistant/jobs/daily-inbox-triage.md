@@ -1,7 +1,7 @@
 +++
 version = 1
 timeout = "10m"
-workdir = "/Users/edheltzel/.cos/work"
+workdir = "~/.relay/workspaces/daily-inbox-triage"
 backend = "codex"
 
 [[triggers]]
@@ -9,7 +9,7 @@ id = "daily-evening"
 kind = "cron"
 schedule = "30 17 * * *"
 timezone = "Europe/London"
-enabled = true
+enabled = false
 +++
 
 Triage ed's Gmail inbox from the last 48 hours and apply the existing
