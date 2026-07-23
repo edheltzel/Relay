@@ -71,13 +71,14 @@ flowchart TD
 
 ## Get started
 
-You need Apple Silicon macOS or x86_64 Linux, Git, and one supported coding
-agent installed and signed in. iMessage requires macOS.
+You need Apple Silicon macOS or x86_64 Linux, Git, an authenticated
+[GitHub CLI](https://cli.github.com/) session with access to this private repository,
+and one supported coding agent installed and signed in. iMessage requires macOS.
 
 Install the latest release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh
+tmp="$(mktemp)" && (trap 'rm -f "$tmp"' 0; gh api -H "Accept: application/vnd.github.raw+json" 'repos/edheltzel/relay/contents/install.sh?ref=master' >"$tmp" && sh "$tmp")
 ```
 
 The binary goes to `~/.local/bin`. If your shell cannot find `relay`, add that

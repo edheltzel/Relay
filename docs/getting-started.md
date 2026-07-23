@@ -13,7 +13,8 @@ You need:
 - Claude Code, Codex, or Pi installed, authenticated, and runnable by the same
   user that will run Relay
 - Git for the assistant repository created by `relay init`
-- `curl`, `tar`, and either `shasum` or `sha256sum` for the release installer
+- `gh` authenticated with access to this private repository, `tar`, and either
+  `shasum` or `sha256sum` for the release installer
 
 Relay uses the backend's existing login, settings, tools, MCP servers, global
 skills, and backend configuration. Each chat runs from `assistant_root`, so the
@@ -44,7 +45,7 @@ before starting Relay:
 On Apple Silicon macOS or x86_64 Linux, install the latest prebuilt release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh
+tmp="$(mktemp)" && (trap 'rm -f "$tmp"' 0; gh api -H "Accept: application/vnd.github.raw+json" 'repos/edheltzel/relay/contents/install.sh?ref=master' >"$tmp" && sh "$tmp")
 ```
 
 The installer verifies the archive against its published SHA-256 checksum
@@ -58,7 +59,7 @@ archive.
 
 ## Build from source
 
-Use this path on other Rust-supported architectures or when testing `main`:
+Use this path on other Rust-supported architectures or when testing `master`:
 
 ```sh
 git clone https://github.com/edheltzel/relay.git

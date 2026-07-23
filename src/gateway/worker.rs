@@ -235,7 +235,7 @@ where
             None
         };
 
-        // Some backends let relay choose the session id. Mark those before the
+        // Some backends let Relay choose the session id. Mark those before the
         // run so a post-create failure does not retry the same create call.
         if is_new && runner.mark_started_before_run() {
             let _ = ctx.store.lock().unwrap().mark_started(&job.thread, None);
