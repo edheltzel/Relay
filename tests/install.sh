@@ -32,34 +32,45 @@ case "$1" in
 esac
 EOF
 
-cat > "$fake_bin/curl" <<'EOF'
+cat > "$fake_bin/gh" <<'EOF'
 #!/bin/sh
 set -eu
 
-output=""
-url=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o)
-      output="$2"
-      shift 2
-      ;;
-    -*) shift ;;
-    *)
-      url="$1"
-      shift
-      ;;
-  esac
-done
+if [ "${GH_FAIL_AUTH:-}" = "1" ]; then
+  exit 1
+fi
 
-case "$url" in
-  */releases/latest)
-    printf '{"browser_download_url": "https://example.test/relay-v0.0.0-%s.tar.gz"}\n' \
-      "$FAKE_TARGET"
+case "$1:$2" in
+  release:view)
+    printf 'v0.0.0\n'
     ;;
-  *.tar.gz.sha256) cp "$FIXTURE_CHECKSUM" "$output" ;;
-  *.tar.gz) cp "$FIXTURE_ARCHIVE" "$output" ;;
-  *) exit 1 ;;
+  release:download)
+    tag="$3"
+    shift 3
+    destination=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --dir)
+          destination="$2"
+          shift 2
+          ;;
+        --pattern|--repo)
+          shift 2
+          ;;
+        *)
+          exit 1
+          ;;
+      esac
+    done
+    archive_name="relay-${tag}-${FAKE_TARGET}.tar.gz"
+    cp "$FIXTURE_ARCHIVE" "$destination/$archive_name"
+    if [ "${GH_SKIP_CHECKSUM:-}" != "1" ]; then
+      cp "$FIXTURE_CHECKSUM" "$destination/$archive_name.sha256"
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
 esac
 EOF
 
@@ -72,7 +83,7 @@ fi
 printf '%s\n' "$*" >> "$XATTR_LOG"
 EOF
 
-chmod +x "$fake_bin/uname" "$fake_bin/curl" "$fake_bin/xattr"
+chmod +x "$fake_bin/uname" "$fake_bin/gh" "$fake_bin/xattr"
 
 run_installer() {
   local os="$1"
@@ -89,6 +100,8 @@ run_installer() {
   FIXTURE_CHECKSUM="$checksum" \
   XATTR_LOG="$xattr_log" \
   XATTR_SIGNAL_PARENT="${XATTR_SIGNAL_PARENT:-}" \
+  GH_FAIL_AUTH="${GH_FAIL_AUTH:-}" \
+  GH_SKIP_CHECKSUM="${GH_SKIP_CHECKSUM:-}" \
   BIN_DIR="$bin_dir" \
   PATH="$fake_bin:$PATH" \
     sh "$repo_root/install.sh"
@@ -145,3 +158,33 @@ run_installer \
   "$fixture_dir/relay.tar.gz.sha256" "$linux_bin" "$linux_xattr"
 test -x "$linux_bin/relay"
 test ! -e "$linux_xattr"
+
+auth_bin="$test_root/auth-bin"
+auth_xattr="$test_root/auth-xattr.log"
+auth_stderr="$test_root/auth.stderr"
+mkdir -p "$auth_bin"
+set +e
+GH_FAIL_AUTH=1 run_installer \
+  Linux x86_64 x86_64-unknown-linux-gnu \
+  "$fixture_dir/relay.tar.gz.sha256" "$auth_bin" "$auth_xattr" \
+  >"$test_root/auth.stdout" 2>"$auth_stderr"
+auth_status=$?
+set -e
+test "$auth_status" -eq 1
+grep -F "relay install: cannot access private releases" "$auth_stderr"
+test ! -e "$auth_bin/relay"
+
+asset_bin="$test_root/asset-bin"
+asset_xattr="$test_root/asset-xattr.log"
+asset_stderr="$test_root/asset.stderr"
+mkdir -p "$asset_bin"
+set +e
+GH_SKIP_CHECKSUM=1 run_installer \
+  Linux x86_64 x86_64-unknown-linux-gnu \
+  "$fixture_dir/relay.tar.gz.sha256" "$asset_bin" "$asset_xattr" \
+  >"$test_root/asset.stdout" 2>"$asset_stderr"
+asset_status=$?
+set -e
+test "$asset_status" -eq 1
+grep -F "relay install: release v0.0.0 has no complete asset set" "$asset_stderr"
+test ! -e "$asset_bin/relay"

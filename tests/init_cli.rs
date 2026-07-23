@@ -245,7 +245,7 @@ fn restart_and_reload_invoke_the_platform_service_manager() {
     let manager_path = bin_dir.join(manager);
     std::fs::write(
         &manager_path,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PUSH_RESTART_ARGS_PATH\"\nprintf 'Service manager ran.\\n'\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RELAY_RESTART_ARGS_PATH\"\nprintf 'Service manager ran.\\n'\n",
     )
     .unwrap();
     let mut permissions = std::fs::metadata(&manager_path).unwrap().permissions();
@@ -263,7 +263,7 @@ fn restart_and_reload_invoke_the_platform_service_manager() {
         let output = Command::new(env!("CARGO_BIN_EXE_relay"))
             .arg(command)
             .env("PATH", &path)
-            .env("PUSH_RESTART_ARGS_PATH", &args_path)
+            .env("RELAY_RESTART_ARGS_PATH", &args_path)
             .output()
             .unwrap();
 
@@ -309,7 +309,7 @@ fn reload_runs_the_service_manager_when_stdout_is_closed() {
     let manager_path = bin_dir.join(manager);
     std::fs::write(
         &manager_path,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$PUSH_RESTART_ARGS_PATH\"\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$RELAY_RESTART_ARGS_PATH\"\n",
     )
     .unwrap();
     let mut permissions = std::fs::metadata(&manager_path).unwrap().permissions();
@@ -328,7 +328,7 @@ fn reload_runs_the_service_manager_when_stdout_is_closed() {
     let status = Command::new(env!("CARGO_BIN_EXE_relay"))
         .arg("reload")
         .env("PATH", path)
-        .env("PUSH_RESTART_ARGS_PATH", &args_path)
+        .env("RELAY_RESTART_ARGS_PATH", &args_path)
         .stdout(Stdio::from(closed_stdout))
         .status()
         .unwrap();

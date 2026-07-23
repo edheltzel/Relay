@@ -19,7 +19,7 @@ handle work in the background.
   <a class="md-button" href="#what-can-it-do">What it can do&nbsp; ↓</a>
 </p>
 
-<p class="relay-install">curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh</p>
+<p class="relay-install">tmp="$(mktemp)" &amp;&amp; (trap 'rm -f "$tmp"' 0; gh api -H "Accept: application/vnd.github.raw+json" 'repos/edheltzel/relay/contents/install.sh?ref=master' &gt;"$tmp" &amp;&amp; sh "$tmp")</p>
 
 <ul class="relay-signals">
   <li><strong>One small binary</strong>No new agent runtime</li>

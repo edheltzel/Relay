@@ -132,7 +132,7 @@ fn inspect_config(config_path: &Path, target: &Path) -> Result<ConfigState> {
     validate_runtime_boundary(Some(table), target)?;
     if table.contains_key("assistant_dir") || table.contains_key("jobs_dir") {
         bail!(
-            "{} uses legacy assistant_dir or jobs_dir settings. Move SOUL.md, context, and jobs under one assistant directory, replace those settings with assistant_root, then rerun push init.",
+            "{} uses legacy assistant_dir or jobs_dir settings. Move SOUL.md, context, and jobs under one assistant directory, replace those settings with assistant_root, then rerun relay init.",
             config_path.display()
         );
     }
@@ -197,14 +197,14 @@ fn validate_config_secrets(config_path: &Path, target: &Path, config: &toml::Tab
 
 fn validate_runtime_boundary(config: Option<&toml::Table>, target: &Path) -> Result<()> {
     let assistant = resolve_existing_or_lexical(target)?;
-    let jobs_run = configured_runtime_path(config, "jobs_run_dir", "~/.push/run")?;
+    let jobs_run = configured_runtime_path(config, "jobs_run_dir", "~/.relay/run")?;
     if assistant.starts_with(&jobs_run) || jobs_run.starts_with(&assistant) {
         bail!("jobs_run_dir must stay outside assistant_root; choose a separate assistant path or update jobs_run_dir");
     }
     for (key, default) in [
-        ("state_path", "~/.push/state.json"),
-        ("database_path", "~/.push/push.db"),
-        ("audit_log_path", "~/.push/audit.jsonl"),
+        ("state_path", "~/.relay/state.json"),
+        ("database_path", "~/.relay/relay.db"),
+        ("audit_log_path", "~/.relay/audit.jsonl"),
     ] {
         let runtime = configured_runtime_path(config, key, default)?;
         if runtime.starts_with(&assistant) {
@@ -487,7 +487,7 @@ fn write_config(config_path: &Path, contents: &[u8]) -> Result<()> {
         .file_name()
         .context("config path has no file name")?
         .to_string_lossy();
-    let temporary = parent.join(format!(".{name}.push-init-{}", uuid::Uuid::new_v4()));
+    let temporary = parent.join(format!(".{name}.relay-init-{}", uuid::Uuid::new_v4()));
     let result = (|| -> Result<()> {
         let mut file = OpenOptions::new()
             .write(true)

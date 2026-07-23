@@ -11,7 +11,7 @@ need() {
   }
 }
 
-need curl
+need gh
 need tar
 
 sha256() {
@@ -52,23 +52,29 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-api="https://api.github.com/repos/$repo/releases/latest"
-asset_url="$(
-  curl -fsSL "$api" \
-    | sed -n 's/.*"browser_download_url": "\(.*relay-v[^"]*-'"$target"'\.tar\.gz\)".*/\1/p' \
-    | head -n 1
-)"
-
-if [ -z "$asset_url" ]; then
-  echo "relay install: no release asset found for $target" >&2
+if ! tag="$(gh release view --repo "$repo" --json tagName --jq .tagName 2>/dev/null)"; then
+  echo "relay install: cannot access private releases; run 'gh auth login' or set GH_TOKEN" >&2
   exit 1
 fi
 
-echo "Downloading $asset_url"
-curl -fsSL "$asset_url" -o "$tmp/relay.tar.gz"
-curl -fsSL "${asset_url}.sha256" -o "$tmp/relay.tar.gz.sha256"
+archive_name="relay-${tag}-${target}.tar.gz"
+checksum_name="${archive_name}.sha256"
+archive_path="$tmp/$archive_name"
+checksum_path="$tmp/$checksum_name"
 
-expected="$(awk 'NR == 1 { print $1 }' "$tmp/relay.tar.gz.sha256" | tr '[:upper:]' '[:lower:]')"
+echo "Downloading $repo release $tag for $target"
+if ! gh release download "$tag" \
+  --repo "$repo" \
+  --pattern "$archive_name" \
+  --pattern "$checksum_name" \
+  --dir "$tmp" \
+  || [ ! -f "$archive_path" ] \
+  || [ ! -f "$checksum_path" ]; then
+  echo "relay install: release $tag has no complete asset set for $target" >&2
+  exit 1
+fi
+
+expected="$(awk 'NR == 1 { print $1 }' "$checksum_path" | tr '[:upper:]' '[:lower:]')"
 case "$expected" in
   *[!0-9a-f]*|'')
     echo "relay install: release checksum is malformed" >&2
@@ -80,14 +86,14 @@ if [ "${#expected}" -ne 64 ]; then
   exit 1
 fi
 
-actual="$(sha256 "$tmp/relay.tar.gz")"
+actual="$(sha256 "$archive_path")"
 if [ "$actual" != "$expected" ]; then
   echo "relay install: release checksum verification failed" >&2
   exit 1
 fi
 
 echo "Verified SHA-256 checksum"
-tar -xzf "$tmp/relay.tar.gz" -C "$tmp"
+tar -xzf "$archive_path" -C "$tmp"
 
 mkdir -p "$bin_dir"
 source="$(find "$tmp" -type f -name relay -perm -111 | head -n 1)"

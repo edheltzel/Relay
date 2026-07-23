@@ -41,7 +41,7 @@ pub(crate) fn same_file(expected: &std::fs::Metadata, opened: &std::fs::Metadata
         && opened.is_file()
 }
 
-/// Restricts a Push-owned path to owner-only access (0o700 directories,
+/// Restricts a Relay-owned path to owner-only access (0o700 directories,
 /// 0o600 files). A no-op on non-Unix platforms.
 #[cfg(unix)]
 pub(crate) fn restrict_permissions(path: &Path, directory: bool) -> std::io::Result<()> {

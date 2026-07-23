@@ -127,7 +127,7 @@ impl Config {
         for removed in ["permission_profile", "permission_profiles"] {
             if root.contains_key(removed) {
                 bail!(
-                    "{removed} is no longer supported; configure permissions in the selected agent and remove this key from Push config"
+                    "{removed} is no longer supported; configure permissions in the selected agent and remove this key from Relay config"
                 );
             }
         }
@@ -143,7 +143,7 @@ impl Config {
             })
         {
             bail!(
-                "route permission_profile is no longer supported; configure permissions in the selected agent and remove this key from Push config"
+                "route permission_profile is no longer supported; configure permissions in the selected agent and remove this key from Relay config"
             );
         }
         for legacy in [
@@ -160,7 +160,7 @@ impl Config {
         ] {
             if root.contains_key(legacy) {
                 bail!(
-                    "legacy permission setting {legacy:?} is no longer supported; configure permissions in the selected agent and remove this key from Push config"
+                    "legacy permission setting {legacy:?} is no longer supported; configure permissions in the selected agent and remove this key from Relay config"
                 );
             }
         }
@@ -171,7 +171,7 @@ impl Config {
                 .is_some_and(|telegram| telegram.contains_key("bot_token_env"));
         if has_removed_telegram_token_env {
             bail!(
-                "telegram_bot_token_env / telegram.bot_token_env is no longer configurable; set TELEGRAM_BOT_TOKEN or remove this key from Push config"
+                "telegram_bot_token_env / telegram.bot_token_env is no longer configurable; set TELEGRAM_BOT_TOKEN or remove this key from Relay config"
             );
         }
         for (removed, replacement) in [
@@ -179,8 +179,8 @@ impl Config {
             ("codex_bin", "put codex on the service PATH instead"),
             ("pi_bin", "put pi on the service PATH instead"),
             ("codex_model", "configure the model in Codex instead"),
-            ("sessions_dir", "remove this key from Push config"),
-            ("reply_marker", "remove this key from Push config"),
+            ("sessions_dir", "remove this key from Relay config"),
+            ("reply_marker", "remove this key from Relay config"),
         ] {
             if root.contains_key(removed) {
                 bail!("{removed} is no longer configurable; {replacement}");
@@ -409,7 +409,7 @@ impl Config {
 
     // Jobs run unattended with write access. The assistant repository is an
     // allowed workdir so jobs can use its context, skills, and runbooks.
-    // Push-owned runtime state and configuration stay protected.
+    // Relay-owned runtime state and configuration stay protected.
     pub fn validate_job_workdir(&self, workdir: &Path) -> Result<()> {
         let workdir = resolved_absolute("job workdir", workdir)?;
         let protected_paths = [
@@ -425,7 +425,7 @@ impl Config {
             let protected = resolved_absolute(label, Path::new(protected))?;
             if paths_overlap(&workdir, &protected) {
                 bail!(
-                    "job workdir {} overlaps Push-owned {label} {}",
+                    "job workdir {} overlaps Relay-owned {label} {}",
                     workdir.display(),
                     protected.display()
                 );

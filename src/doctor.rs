@@ -774,7 +774,7 @@ claude_tools = []
             .to_string_lossy()
             .to_string();
         cfg.database_path = state_path
-            .with_extension("push.db")
+            .with_extension("relay.db")
             .to_string_lossy()
             .to_string();
         let report = run_checks(&cfg);
