@@ -2,7 +2,7 @@
 
 This guide gets one private chat working with one coding-agent backend. Start
 with Telegram or Slack on macOS or Linux, or iMessage on macOS. Add multiple channels,
-routes, and scheduled jobs after the basic path passes `push doctor`.
+routes, and scheduled jobs after the basic path passes `relay doctor`.
 
 ## 1. Check the requirements
 
@@ -11,15 +11,15 @@ You need:
 - Apple Silicon macOS or x86_64 Linux for the current prebuilt release
 - macOS for iMessage, or macOS/Linux for Telegram or Slack
 - Claude Code, Codex, or Pi installed, authenticated, and runnable by the same
-  user that will run Push
-- Git for the assistant repository created by `push init`
+  user that will run Relay
+- Git for the assistant repository created by `relay init`
 - `curl`, `tar`, and either `shasum` or `sha256sum` for the release installer
 
-Push uses the backend's existing login, settings, tools, MCP servers, global
+Relay uses the backend's existing login, settings, tools, MCP servers, global
 skills, and backend configuration. Each chat runs from `assistant_root`, so the
 backend can discover project instructions and repository-scoped skills and work
 with the assistant's context directly. Confirm the selected command works
-before starting Push:
+before starting Relay:
 
 === "Codex"
 
@@ -39,12 +39,12 @@ before starting Push:
     pi --version
     ```
 
-## 2. Install Push
+## 2. Install Relay
 
 On Apple Silicon macOS or x86_64 Linux, install the latest prebuilt release:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/edheltzel/push/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/edheltzel/relay/master/install.sh | sh
 ```
 
 The installer verifies the archive against its published SHA-256 checksum
@@ -61,27 +61,27 @@ archive.
 Use this path on other Rust-supported architectures or when testing `main`:
 
 ```sh
-git clone https://github.com/edheltzel/push.git
-cd push
+git clone https://github.com/edheltzel/relay.git
+cd relay
 cargo build --locked --release
 mkdir -p ~/.local/bin
-install -m 755 target/release/push ~/.local/bin/push
+install -m 755 target/release/relay ~/.local/bin/relay
 ```
 
 ## 3. Create your assistant repository
 
 ```sh
-push init ~/Code/assistant
+relay init ~/Code/assistant
 ```
 
-Push creates one Git-versioned repository containing `SOUL.md`, shared
+Relay creates one Git-versioned repository containing `SOUL.md`, shared
 instructions in `AGENTS.md`, a `CLAUDE.md` reference to those instructions,
 `README.md`, `context/`, and empty `evals/` and `jobs/` directories. It records
 the canonical root in the selected config file. A new config starts with
 Telegram, Codex, and an empty `telegram.allow_user_ids` list that you must fill
 in. Edit `SOUL.md` to define identity and operating style, then add durable
 user context under `context/`.
-Push reads these files at run time and never writes machine-specific paths into
+Relay reads these files at run time and never writes machine-specific paths into
 the repository. Read [Designing an assistant](designing-an-assistant.md) for a
 practical structure for identity, context, shared skills, jobs, and evals.
 
@@ -90,7 +90,7 @@ practical structure for identity, context, shared skills, jobs, and evals.
 === "Telegram"
 
     Create a bot with Telegram's `@BotFather`, send it one message, and find
-    your stable numeric user ID. Then edit `~/.push/config.toml`:
+    your stable numeric user ID. Then edit `~/.relay/config.toml`:
 
     ```toml
     channel = "telegram"
@@ -108,7 +108,7 @@ practical structure for identity, context, shared skills, jobs, and evals.
 === "iMessage"
 
     Give the terminal or service host Full Disk Access in macOS System
-    Settings, then edit `~/.push/config.toml`:
+    Settings, then edit `~/.relay/config.toml`:
 
     ```toml
     channel = "imessage"
@@ -128,7 +128,7 @@ practical structure for identity, context, shared skills, jobs, and evals.
 
     Create a Slack app with Socket Mode, `connections:write`, `im:history`,
     `chat:write`, and the `message.im` bot event. Set the two tokens in the
-    service environment, then edit `~/.push/config.toml`:
+    service environment, then edit `~/.relay/config.toml`:
 
     ```toml
     channel = "slack"
@@ -145,7 +145,7 @@ practical structure for identity, context, shared skills, jobs, and evals.
 Replace `codex` with `claude` for Claude Code or `pi` for Pi. Pi must already
 have a configured model provider or authenticated account for the service user.
 
-If you replace the config file created by `push init`, keep its
+If you replace the config file created by `relay init`, keep its
 `assistant_root` setting. Running the same init command again is safe for a
 complete assistant repository and restores the setting without overwriting
 user files.
@@ -153,8 +153,8 @@ user files.
 ## 5. Validate and run
 
 ```sh
-push doctor
-push
+relay doctor
+relay
 ```
 
 Send a new message after the gateway starts. Telegram deliberately discards
@@ -164,7 +164,7 @@ Try:
 
 > Summarize `/absolute/path/to/my-project/README.md`. Do not change anything.
 
-Replace the example path with a file the service user can read. Push does not
+Replace the example path with a file the service user can read. Relay does not
 override the agent's sandbox, approval mode, or tool list. The selected agent's
 configuration decides what the request can do. Read [permissions and
 security](security.md) before running the gateway unattended.
@@ -172,7 +172,7 @@ security](security.md) before running the gateway unattended.
 ## 6. Keep it online
 
 A foreground process stops when its terminal closes. Follow [run as a
-service](services.md) to install Push under `launchd` on macOS or `systemd` for
+service](services.md) to install Relay under `launchd` on macOS or `systemd` for
 a Telegram- or Slack-only Linux host.
 
 ## Next steps

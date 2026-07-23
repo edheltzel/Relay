@@ -1,12 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="edheltzel/push"
+repo="edheltzel/relay"
 bin_dir="${BIN_DIR:-$HOME/.local/bin}"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || {
-    echo "push install: missing required command: $1" >&2
+    echo "relay install: missing required command: $1" >&2
     exit 1
   }
 }
@@ -20,7 +20,7 @@ sha256() {
   elif command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{ print $1 }'
   else
-    echo "push install: missing required command: shasum or sha256sum" >&2
+    echo "relay install: missing required command: shasum or sha256sum" >&2
     exit 1
   fi
 }
@@ -34,7 +34,7 @@ case "$os:$arch" in
   Linux:x86_64) target="x86_64-unknown-linux-gnu" ;;
   Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-gnu" ;;
   *)
-    echo "push install: unsupported platform $os/$arch" >&2
+    echo "relay install: unsupported platform $os/$arch" >&2
     exit 1
     ;;
 esac
@@ -55,48 +55,48 @@ trap 'exit 143' TERM
 api="https://api.github.com/repos/$repo/releases/latest"
 asset_url="$(
   curl -fsSL "$api" \
-    | sed -n 's/.*"browser_download_url": "\(.*push-v[^"]*-'"$target"'\.tar\.gz\)".*/\1/p' \
+    | sed -n 's/.*"browser_download_url": "\(.*relay-v[^"]*-'"$target"'\.tar\.gz\)".*/\1/p' \
     | head -n 1
 )"
 
 if [ -z "$asset_url" ]; then
-  echo "push install: no release asset found for $target" >&2
+  echo "relay install: no release asset found for $target" >&2
   exit 1
 fi
 
 echo "Downloading $asset_url"
-curl -fsSL "$asset_url" -o "$tmp/push.tar.gz"
-curl -fsSL "${asset_url}.sha256" -o "$tmp/push.tar.gz.sha256"
+curl -fsSL "$asset_url" -o "$tmp/relay.tar.gz"
+curl -fsSL "${asset_url}.sha256" -o "$tmp/relay.tar.gz.sha256"
 
-expected="$(awk 'NR == 1 { print $1 }' "$tmp/push.tar.gz.sha256" | tr '[:upper:]' '[:lower:]')"
+expected="$(awk 'NR == 1 { print $1 }' "$tmp/relay.tar.gz.sha256" | tr '[:upper:]' '[:lower:]')"
 case "$expected" in
   *[!0-9a-f]*|'')
-    echo "push install: release checksum is malformed" >&2
+    echo "relay install: release checksum is malformed" >&2
     exit 1
     ;;
 esac
 if [ "${#expected}" -ne 64 ]; then
-  echo "push install: release checksum is malformed" >&2
+  echo "relay install: release checksum is malformed" >&2
   exit 1
 fi
 
-actual="$(sha256 "$tmp/push.tar.gz")"
+actual="$(sha256 "$tmp/relay.tar.gz")"
 if [ "$actual" != "$expected" ]; then
-  echo "push install: release checksum verification failed" >&2
+  echo "relay install: release checksum verification failed" >&2
   exit 1
 fi
 
 echo "Verified SHA-256 checksum"
-tar -xzf "$tmp/push.tar.gz" -C "$tmp"
+tar -xzf "$tmp/relay.tar.gz" -C "$tmp"
 
 mkdir -p "$bin_dir"
-source="$(find "$tmp" -type f -name push -perm -111 | head -n 1)"
+source="$(find "$tmp" -type f -name relay -perm -111 | head -n 1)"
 if [ -z "$source" ]; then
-  echo "push install: release archive does not contain an executable" >&2
+  echo "relay install: release archive does not contain an executable" >&2
   exit 1
 fi
 
-staged="$(mktemp "$bin_dir/.push.install.XXXXXX")"
+staged="$(mktemp "$bin_dir/.relay.install.XXXXXX")"
 cp "$source" "$staged"
 chmod 755 "$staged"
 
@@ -106,11 +106,11 @@ if [ "$os" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
   fi
 fi
 
-mv -f "$staged" "$bin_dir/push"
+mv -f "$staged" "$bin_dir/relay"
 staged=""
 
-echo "Installed push to $bin_dir/push"
+echo "Installed relay to $bin_dir/relay"
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
-  *) echo "Add $bin_dir to PATH to run push from any shell." ;;
+  *) echo "Add $bin_dir to PATH to run relay from any shell." ;;
 esac

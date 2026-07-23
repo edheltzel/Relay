@@ -1,4 +1,4 @@
-# Push v1 PRD
+# Relay v1 PRD
 
 **Status:** Historical product plan, superseded by the current documentation
 
@@ -12,7 +12,7 @@
 
 ## Summary
 
-Push is a small Rust binary that turns coding-agent runtimes into a personal
+Relay is a small Rust binary that turns coding-agent runtimes into a personal
 assistant you can text.
 
 It polls iMessage, filters allowed senders, loads user-owned assistant context,
@@ -39,7 +39,7 @@ Build the smallest useful personal assistant gateway:
 - Inject user-owned assistant context into each run.
 - Support simple per-thread backend routing.
 - Load one user-owned `SOUL.md` identity file.
-- Create and configure one user-selected assistant repository with `push init`.
+- Create and configure one user-selected assistant repository with `relay init`.
 - Keep the binary local and self-contained.
 
 ## Non-Goals
@@ -67,9 +67,9 @@ Hermes and similar projects build more of the runtime: memory databases,
 summarizers, skills, subagents, schedulers, provider abstractions, and custom
 agent behavior.
 
-Push takes a narrower bet:
+Relay takes a narrower bet:
 
-| Area | Hermes-style product | Push |
+| Area | Hermes-style product | Relay |
 |---|---|---|
 | Runtime | Built into the product | External backend |
 | Tools | Product-owned | Backend-owned |
@@ -81,13 +81,13 @@ Push takes a narrower bet:
 ## Core User Flow
 
 1. User sends a text.
-2. Push reads the new row from `chat.db`.
-3. Push filters by allowlist and reply marker.
-4. Push loads assistant context.
-5. Push resolves the thread's backend session.
-6. Push runs Claude Code, Codex, or Pi.
-7. Push sends the final reply back over iMessage.
-8. Push stores the latest message row and backend session state.
+2. Relay reads the new row from `chat.db`.
+3. Relay filters by allowlist and reply marker.
+4. Relay loads assistant context.
+5. Relay resolves the thread's backend session.
+6. Relay runs Claude Code, Codex, or Pi.
+7. Relay sends the final reply back over iMessage.
+8. Relay stores the latest message row and backend session state.
 
 ## Components
 
@@ -151,7 +151,7 @@ user prompt.
 | `assistant_root` | Canonical root of the one assistant repository. `SOUL.md`, `context/`, and `jobs/` are derived. |
 | `jobs_agent` | Optional default job backend; otherwise uses `agent`. |
 | `jobs_max_timeout` | Maximum validated job timeout; defaults to `30m`. |
-| `jobs_run_dir` | Local advisory-lock state; defaults to `~/.push/run`. |
+| `jobs_run_dir` | Local advisory-lock state; defaults to `~/.relay/run`. |
 | `jobs_max_workers` | Maximum concurrent scheduled jobs; defaults to `2`. |
 | `imessage.db_path` | Path to Messages `chat.db`. |
 | `poll_interval` | How often to poll. |
@@ -164,7 +164,7 @@ user prompt.
 | `state_path` | JSON state path. |
 | `audit_log_path` | Local JSONL audit log path. |
 | `audit_log_content` | Whether audit events include message and reply text. |
-| `database_path` | Canonical SQLite history path; defaults to `~/.push/push.db`. |
+| `database_path` | Canonical SQLite history path; defaults to `~/.relay/relay.db`. |
 
 ## Control Commands
 
@@ -175,8 +175,8 @@ user prompt.
 
 - A configured self-chat message gets a reply.
 - Non-allowlisted senders are ignored.
-- Push does not answer messages containing the reply marker.
-- Push only advances `last_row_id` after a message is ignored or completed.
+- Relay does not answer messages containing the reply marker.
+- Relay only advances `last_row_id` after a message is ignored or completed.
 - `/clear` starts a fresh backend session.
 - Claude backend can create and resume a session.
 - Codex backend can create a session, store the Codex thread id, and resume it.
@@ -186,7 +186,7 @@ user prompt.
 - Fresh or lost backend sessions receive bounded recent canonical history;
   resumed sessions receive only the new request.
 - Assistant identity is included in backend runs at instruction priority.
-- `push init [path]` safely creates and Git-initializes the conventional
+- `relay init [path]` safely creates and Git-initializes the conventional
   assistant structure, defaults to `./assistant`, and persists one canonical
   root without overwriting user files.
 - Every backend run receives resolved assistant, context, and jobs locations in

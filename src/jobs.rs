@@ -1970,7 +1970,7 @@ fn bound_result(value: &str) -> String {
     if value.len() <= MAX_STORED_RESULT_BYTES {
         return value.to_string();
     }
-    const SUFFIX: &str = "\n[truncated by push]";
+    const SUFFIX: &str = "\n[truncated by relay]";
     let mut boundary = MAX_STORED_RESULT_BYTES.saturating_sub(SUFFIX.len());
     while !value.is_char_boundary(boundary) {
         boundary -= 1;
@@ -2085,12 +2085,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn manual_claim_process_helper() {
-        let Ok(jobs_dir) = std::env::var("PUSH_TEST_CLAIM_JOBS_DIR") else {
+        let Ok(jobs_dir) = std::env::var("RELAY_TEST_CLAIM_JOBS_DIR") else {
             return;
         };
-        let database = PathBuf::from(std::env::var("PUSH_TEST_CLAIM_DATABASE").unwrap());
-        let run_dir = PathBuf::from(std::env::var("PUSH_TEST_CLAIM_RUN_DIR").unwrap());
-        let ready = PathBuf::from(std::env::var("PUSH_TEST_CLAIM_READY").unwrap());
+        let database = PathBuf::from(std::env::var("RELAY_TEST_CLAIM_DATABASE").unwrap());
+        let run_dir = PathBuf::from(std::env::var("RELAY_TEST_CLAIM_RUN_DIR").unwrap());
+        let ready = PathBuf::from(std::env::var("RELAY_TEST_CLAIM_READY").unwrap());
         let cfg = cfg(Path::new(&jobs_dir), &database, &run_dir);
         let job = Catalog::load_named(&cfg, "cli-live").unwrap();
         let mut ledger = Ledger::open(&cfg.database_path).unwrap();
@@ -2279,7 +2279,7 @@ mod tests {
         let database = temp_path("inbox-example-db");
         let run_dir = temp_dir("inbox-example-run");
         let contents = include_str!("../examples/assistant/jobs/daily-inbox-triage.md").replace(
-            "~/.push/workspaces/daily-inbox-triage",
+            "~/.relay/workspaces/daily-inbox-triage",
             &workdir.to_string_lossy(),
         );
         write_job(&jobs_dir, "daily-inbox-triage", &contents);
@@ -2324,7 +2324,7 @@ mod tests {
         write_job(
             &jobs_dir,
             "bad-workdir",
-            "+++\nversion = 1\ntimeout = \"5s\"\nworkdir = \"/definitely/missing/push-job\"\n+++\nbody",
+            "+++\nversion = 1\ntimeout = \"5s\"\nworkdir = \"/definitely/missing/relay-job\"\n+++\nbody",
         );
         let cfg = cfg(&jobs_dir, &database, &run_dir);
 
@@ -3502,10 +3502,10 @@ printf '%s\n' '{"type":"thread.started","thread_id":"after-crash"}'
                 "jobs::tests::manual_claim_process_helper",
                 "--nocapture",
             ])
-            .env("PUSH_TEST_CLAIM_JOBS_DIR", &jobs_dir)
-            .env("PUSH_TEST_CLAIM_DATABASE", &database)
-            .env("PUSH_TEST_CLAIM_RUN_DIR", &run_dir)
-            .env("PUSH_TEST_CLAIM_READY", &ready)
+            .env("RELAY_TEST_CLAIM_JOBS_DIR", &jobs_dir)
+            .env("RELAY_TEST_CLAIM_DATABASE", &database)
+            .env("RELAY_TEST_CLAIM_RUN_DIR", &run_dir)
+            .env("RELAY_TEST_CLAIM_READY", &ready)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -3790,7 +3790,7 @@ printf '%s\n' '{"type":"thread.started","thread_id":"after-crash"}'
             .clone()
             .unwrap();
         assert!(result.len() <= MAX_STORED_RESULT_BYTES);
-        assert!(result.ends_with("[truncated by push]"));
+        assert!(result.ends_with("[truncated by relay]"));
     }
 
     #[tokio::test]

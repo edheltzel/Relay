@@ -1,10 +1,10 @@
-# Push Strategy
+# Relay Strategy
 
 !!! info "Strategy and shipped behavior"
 
     This page describes durable product choices and possible future work. It is
     not a list of shipped features. See the [documentation home](index.md) for
-    current behavior and the [GitHub releases](https://github.com/edheltzel/push/releases)
+    current behavior and the [GitHub releases](https://github.com/edheltzel/relay/releases)
     for released versions.
 
 ## The Bet
@@ -16,16 +16,16 @@ open-source agents are all racing to own the same capabilities: reasoning,
 coding, file edits, shell commands, MCP, plugins, permissions, repo context, and
 task execution.
 
-Push should not compete there.
+Relay should not compete there.
 
-Push should own the durable gateway layer: messages, routing, scheduling,
+Relay should own the durable gateway layer: messages, routing, scheduling,
 history, security, and delivery. The user should own one portable assistant
 repository with identity, context, jobs, and optional project skills. The agent
 runtime should be replaceable.
 
 ## Product Thesis
 
-Push is a personal assistant gateway, not an agent runtime.
+Relay is a personal assistant gateway, not an agent runtime.
 
 The gateway answers these questions:
 
@@ -42,7 +42,7 @@ The backend agent answers a smaller question:
   response should be sent back?
 
 That contract keeps the hard and fast-moving agent work inside products with
-large teams behind them, while Push owns the layer that makes the interaction a
+large teams behind them, while Relay owns the layer that makes the interaction a
 personal assistant.
 
 ## What Personal Assistant Means
@@ -59,7 +59,7 @@ A personal assistant needs:
 - A stable identity across backend changes.
 - Permission and routing rules that match the user's life.
 
-Push supports exactly one assistant. `push init [path]` creates its user-owned,
+Relay supports exactly one assistant. `relay init [path]` creates its user-owned,
 Git-versioned repository with `SOUL.md`, `context/`, and `jobs/`; the user may
 add project-scoped skills. One canonical root is configured; the other paths
 are derived. There are no assistant names, IDs, registries, or selection flows.
@@ -90,7 +90,7 @@ This stays small, legible, and stable across backends and machines.
 
 The assistant repository owns `SOUL.md`, editable context, installed job
 runbooks, and optional project-scoped skills. The runtime owns skill discovery
-and execution, global skills, tools, MCP, permissions, and authentication. Push
+and execution, global skills, tools, MCP, permissions, and authentication. Relay
 runtime state and secrets remain outside the repository.
 
 The gateway should not rebuild these unless there is no reliable backend
@@ -118,9 +118,9 @@ Claude Code, Codex, and Pi fit this shape:
 
 - Claude Code accepts a gateway-generated session id with `--session-id` and
   resumes with `--resume`.
-- Codex creates its own thread id through `codex exec`; Push stores it and later
+- Codex creates its own thread id through `codex exec`; Relay stores it and later
   resumes with `codex exec resume`.
-- Pi reports a session id in JSON mode; Push stores it and resumes with
+- Pi reports a session id in JSON mode; Relay stores it and resumes with
   `--session`.
 
 The state store must therefore track backend-owned session ids, not just
@@ -134,15 +134,15 @@ Hermes is powerful because it builds a full agent runtime and memory system. The
 cost is complexity and a second agent layer between the user and the underlying
 model or tool runtime.
 
-Push takes the opposite bet. It delegates agent quality to first-party or
+Relay takes the opposite bet. It delegates agent quality to first-party or
 specialized coding agents and focuses on the personal gateway layer.
 
-This means Push can be smaller and more durable:
+This means Relay can be smaller and more durable:
 
 - When Claude Code improves, the Claude backend improves.
 - When Codex improves, the Codex backend improves.
 - When Pi improves, the Pi backend improves.
-- When another agent becomes better, Push can add an adapter instead of
+- When another agent becomes better, Relay can add an adapter instead of
   rewriting the product.
 
 ## Durable Direction

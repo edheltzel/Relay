@@ -1,4 +1,4 @@
-//! Environment checks behind `push doctor` and the gateway's startup preflight.
+//! Environment checks behind `relay doctor` and the gateway's startup preflight.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -99,7 +99,7 @@ fn check_scheduled_delivery(cfg: &config::Config, checks: &mut Vec<Check>) {
         checks.push(Check::fail(
             "scheduled delivery",
             format!(
-                "{} invalid installed job(s); run `push job validate` for details before relying on schedules",
+                "{} invalid installed job(s); run `relay job validate` for details before relying on schedules",
                 catalog.errors.len()
             ),
         ));
@@ -347,7 +347,7 @@ fn check_slack_config(cfg: &config::Config, checks: &mut Vec<Check>) {
 
 fn ensure_writable_dir(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let probe = dir.join(format!(".push-doctor-write-test-{}", std::process::id()));
+    let probe = dir.join(format!(".relay-doctor-write-test-{}", std::process::id()));
     std::fs::write(&probe, b"ok")?;
     std::fs::remove_file(probe)?;
     Ok(())
@@ -424,7 +424,7 @@ impl CheckReport {
 
 impl fmt::Display for CheckReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "push doctor")?;
+        writeln!(f, "relay doctor")?;
         for check in &self.checks {
             let marker = match check.status {
                 CheckStatus::Pass => "PASS",
@@ -855,7 +855,7 @@ claude_tools = []
         check_scheduled_delivery(&cfg, &mut checks);
 
         assert!(matches!(checks[0].status, CheckStatus::Fail));
-        assert!(checks[0].message.contains("push job validate"));
+        assert!(checks[0].message.contains("relay job validate"));
         assert!(!checks[0].message.contains("no enabled"));
     }
 

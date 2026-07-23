@@ -11,17 +11,17 @@
 
 ## Summary
 
-Push is a local personal-assistant gateway. It owns channels, conversation
+Relay is a local personal-assistant gateway. It owns channels, conversation
 history, routing, scheduling, approvals, and delivery while
 delegating reasoning and tool use to disposable agent runtimes such as Claude
 Code and Codex. The durable assistant is one user-owned Git repository with
-`SOUL.md`, `context/`, `jobs/`, and optional project skills. Push stores the
+`SOUL.md`, `context/`, `jobs/`, and optional project skills. Relay stores the
 canonical conversation history in SQLite outside that repository.
 
 ## Goals
 
 - Keep exactly one portable assistant across channels and agent backends.
-- Make Push, rather than a backend vendor, the owner of conversation history.
+- Make Relay, rather than a backend vendor, the owner of conversation history.
 - Keep identity legible and directly editable in one Markdown file.
 - Preserve existing backend sessions as a fast path without depending on them
   for durable history.
@@ -34,14 +34,14 @@ canonical conversation history in SQLite outside that repository.
 - Generate or reconcile `MEMORY.md` in the first implementation.
 - Inject an entire conversation transcript into every request.
 - Build embeddings, semantic retrieval, or a general knowledge system.
-- Build a new filesystem sandbox. Push defers to each agent's own controls.
-- Build a custom agent loop, tool runner, plugin system, or MCP layer in Push.
+- Build a new filesystem sandbox. Relay defers to each agent's own controls.
+- Build a custom agent loop, tool runner, plugin system, or MCP layer in Relay.
 - Build assistant registries, IDs, selection, or multi-assistant commands.
 - Define autonomous memory write-back here.
 
 ## Constraints
 
-- Push remains one local Rust process with no inbound server port.
+- Relay remains one local Rust process with no inbound server port.
 - Telegram and iMessage conversations must remain channel-qualified.
 - Claude Code, Codex, and Pi retain different session and instruction mechanisms.
 - A failed history write must not result in an unrecorded request being sent to
@@ -57,7 +57,7 @@ canonical conversation history in SQLite outside that repository.
 ### Ownership boundary
 
 ```text
-Push runtime                    Assistant repository            Agent runtime
+Relay runtime                    Assistant repository            Agent runtime
 channels, scheduling, history   SOUL.md, context, jobs, skills   reasoning, tools,
 security, delivery              user-owned and Git-versioned     execution, global skills, MCP, auth
 ```
@@ -72,10 +72,10 @@ Losing a Claude Code, Codex, or Pi session must not lose the conversation record
 `assistant_root` is the one configured assistant repository. `SOUL.md` beneath
 that root is the single user-owned identity source. The file contains
 personality, communication style, principles, and stable behavioural
-boundaries. Identity does not live in TOML fields. `push init [path]` creates
+boundaries. Identity does not live in TOML fields. `relay init [path]` creates
 the repository and defaults to `./assistant` when no path is given.
 
-At runtime, Push composes the file with a gateway-owned footer rather than
+At runtime, Relay composes the file with a gateway-owned footer rather than
 modifying it on disk:
 
 ```text
@@ -88,19 +88,19 @@ Jobs: /resolved/path/to/assistant/jobs
 
 Begin with context/README.md when user context is relevant.
 Do not modify SOUL.md or evals unless the user asks.
-When the user asks to create or change a job, write the complete runbook directly under Jobs and run `push job validate` before saying it succeeded.
+When the user asks to create or change a job, write the complete runbook directly under Jobs and run `relay job validate` before saying it succeeded.
 ```
 
 Claude Code and Pi receive the composed text as appended system instructions.
-Codex receives it as developer instructions. Push never writes resolved machine paths
+Codex receives it as developer instructions. Relay never writes resolved machine paths
 into `SOUL.md` and does not inject all context files into every prompt. The
 backend decides which files to inspect. Conversation instructions include the
 absolute `context/` path. The agent's own configuration decides access;
-Push does not create a separate filesystem boundary around `SOUL.md` or
+Relay does not create a separate filesystem boundary around `SOUL.md` or
 installed jobs. An agent with write access to the assistant root can change
 them directly.
 
-Push owns the footer so customising `SOUL.md` cannot remove repository
+Relay owns the footer so customising `SOUL.md` cannot remove repository
 locations or ownership rules. Runtime sessions, databases, audit logs,
 locks, delivery state, configuration secrets, and authentication stay outside
 the assistant repository.
@@ -115,7 +115,7 @@ actionable migration error rather than silently losing identity or jobs.
 
 ### Canonical conversation history
 
-`~/.push/push.db` stores every accepted inbound message and every user-visible
+`~/.relay/relay.db` stores every accepted inbound message and every user-visible
 outbound message, whether produced by a backend or by the gateway. The minimum
 logical model is:
 
@@ -139,14 +139,14 @@ The exact schema is an implementation decision, but these invariants are not:
 - Backend replies, local command replies, and user-visible error replies are
   stored with their origin.
 - An assistant response is stored after the backend returns a valid reply and
-  before Push attempts delivery.
+  before Relay attempts delivery.
 - Delivery status is recorded separately from response generation so a retry
   does not invent a second assistant turn.
 - Existing `state.json` cursor and backend-session behaviour remains unchanged
   in this phase. Moving gateway state into SQLite is a separate decision.
 
-On a normal turn, Push resumes the existing backend session and sends only the
-new request. When a backend session is missing, cleared, or replaced, Push may
+On a normal turn, Relay resumes the existing backend session and sends only the
+new request. When a backend session is missing, cleared, or replaced, Relay may
 rehydrate a new session from recent canonical history. Rehydration policy is a
 performance decision and is not required for the initial history store.
 
@@ -188,7 +188,7 @@ execution loops remain backend-owned.
 ### `User.md` plus `Memory.md` injected on every turn
 
 This is legible but mixes user facts, assistant identity, and memory policy. It
-also leaves Push without a complete history from which memory can be audited or
+also leaves Relay without a complete history from which memory can be audited or
 rebuilt. A single `SOUL.md` gives identity one clear owner.
 
 ### Append every exchange to `JOURNAL.md`
@@ -257,6 +257,6 @@ reconciliation is not part of this rollout.
 Approved by Ed Heltzel on 2026-07-11 and updated for the single assistant
 repository on 2026-07-13. Adopt `SOUL.md` as the single identity source,
 `context/` as the editable assistant workspace, `jobs/` as installed runbooks,
-and SQLite as Push's canonical conversation history. Keep backend sessions as a
+and SQLite as Relay's canonical conversation history. Keep backend sessions as a
 fast path. Defer generated memory, reconciliation, retrieval, and summarisation
 to a separate later design.

@@ -5,7 +5,7 @@
 /site/
 
 # Stray compiled binary at repo root
-/push
+/relay
 
 # Local config and state (never commit secrets or session state)
 config.toml

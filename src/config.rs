@@ -862,29 +862,29 @@ fn default_voice_name() -> String {
     DEFAULT_VOICE_NAME.to_string()
 }
 fn default_jobs_dir() -> String {
-    "~/.push/jobs".to_string()
+    "~/.relay/jobs".to_string()
 }
 
 fn default_jobs_max_timeout() -> String {
     "30m".to_string()
 }
 fn default_jobs_run_dir() -> String {
-    "~/.push/run".to_string()
+    "~/.relay/run".to_string()
 }
 fn default_jobs_max_workers() -> usize {
     2
 }
 fn default_state_path() -> String {
-    "~/.push/state.json".to_string()
+    "~/.relay/state.json".to_string()
 }
 fn default_audit_log_path() -> String {
-    "~/.push/audit.jsonl".to_string()
+    "~/.relay/audit.jsonl".to_string()
 }
 fn default_database_path() -> String {
-    "~/.push/push.db".to_string()
+    "~/.relay/relay.db".to_string()
 }
 fn default_assistant_dir() -> String {
-    "~/.push".to_string()
+    "~/.relay".to_string()
 }
 #[cfg(test)]
 mod tests {
@@ -920,7 +920,7 @@ mod tests {
             jobs_max_workers: 2,
             state_path: root.join("state.json").to_string_lossy().to_string(),
             audit_log_path: root.join("audit.jsonl").to_string_lossy().to_string(),
-            database_path: root.join("push.db").to_string_lossy().to_string(),
+            database_path: root.join("relay.db").to_string_lossy().to_string(),
             audit_log_content: false,
             config_path: String::new(),
             agent_commands: AgentCommands::default(),

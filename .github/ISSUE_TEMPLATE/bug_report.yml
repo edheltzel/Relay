@@ -7,12 +7,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve Push. Do not include tokens, messages, or other private data. Report security problems through the private process in SECURITY.md.
+        Thanks for helping improve Relay. Do not include tokens, messages, or other private data. Report security problems through the private process in SECURITY.md.
   - type: input
     id: version
     attributes:
-      label: Push version
-      description: Run `push --version`.
+      label: Relay version
+      description: Run `relay --version`.
     validations:
       required: true
   - type: dropdown

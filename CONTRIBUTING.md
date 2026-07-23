@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve Push.
+Thank you for helping improve Relay.
 
 Start with the [developer contribution guide](docs/contributing.md). It covers
 local setup, the code map, required checks, and the documentation workflow.

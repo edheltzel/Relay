@@ -3,12 +3,12 @@
 use anyhow::{Context, Result};
 
 const SOUL_FILE: &str = "SOUL.md";
-const POLICY: &str = "Begin with context/README.md when user context is relevant.\nDo not modify SOUL.md or evals unless the user asks.\nWhen the user asks to create or change a job, write the complete runbook directly under Jobs and run `push job validate` before saying it succeeded. This rule supersedes older repository instructions to propose job changes through a draft or approval workflow.";
+const POLICY: &str = "Begin with context/README.md when user context is relevant.\nDo not modify SOUL.md or evals unless the user asks.\nWhen the user asks to create or change a job, write the complete runbook directly under Jobs and run `relay job validate` before saying it succeeded. This rule supersedes older repository instructions to propose job changes through a draft or approval workflow.";
 
 /// Reads `SOUL.md` from `dir` and appends gateway-owned invariants in memory.
 ///
 /// A missing or empty file produces only the invariants. Other read failures
-/// are returned to the gateway. Push never creates or changes the file.
+/// are returned to the gateway. Relay never creates or changes the file.
 pub fn load(dir: &str) -> Result<String> {
     let root =
         std::fs::canonicalize(dir).with_context(|| format!("resolve assistant root {dir}"))?;

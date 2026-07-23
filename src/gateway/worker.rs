@@ -18,7 +18,7 @@ use crate::voice::MAX_AUDIO_BYTES;
 use super::{audit, complete_row, Ctx, Job, WorkerState};
 
 pub(super) const SESSION_SETUP_FAILURE: &str =
-    "Push could not prepare this conversation. Check the local logs, then resend.";
+    "Relay could not prepare this conversation. Check the local logs, then resend.";
 
 /// Processes one thread's jobs strictly in order, exiting when the queue closes.
 pub(super) async fn run(
@@ -544,7 +544,7 @@ async fn prepare_voice(ctx: &Ctx, job: &Job) -> std::result::Result<String, Voic
     let Some(voice) = &ctx.voice else {
         return Err(VoicePreparationError::User {
             event: "voice_not_configured",
-            reply: "Voice messages are unavailable. Set voice.openai_api_key in config or OPENAI_API_KEY, restart Push, or send text instead.",
+            reply: "Voice messages are unavailable. Set voice.openai_api_key in config or OPENAI_API_KEY, restart Relay, or send text instead.",
             detail: "OpenAI API key is not configured".to_string(),
         });
     };

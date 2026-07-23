@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 #[test]
 fn job_cli_validates_lists_shows_runs_and_reads_history() {
-    let root = std::env::temp_dir().join(format!("push-job-cli-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("relay-job-cli-{}", Uuid::new_v4()));
     let jobs = root.join("assistant/jobs");
     let work = root.join("work");
     let run = root.join("run");
-    let database = root.join("push.db");
+    let database = root.join("relay.db");
     let config = root.join("config.toml");
     let codex = root.join("bin/codex");
     std::fs::create_dir_all(&jobs).unwrap();
@@ -33,7 +33,7 @@ printf '%s\n' '{"type":"thread.started","thread_id":"cli-thread"}'
 "#,
     );
     write_job_and_config(&jobs, &work, &run, &database, &config);
-    let binary = env!("CARGO_BIN_EXE_push");
+    let binary = env!("CARGO_BIN_EXE_relay");
 
     let validate = run_cli(binary, &config, &["job", "validate"]);
     assert!(validate.status.success());
@@ -85,11 +85,11 @@ printf '%s\n' '{"type":"thread.started","thread_id":"cli-thread"}'
 
 #[test]
 fn concurrent_first_runs_on_a_fresh_database_skip_without_sqlite_errors() {
-    let root = std::env::temp_dir().join(format!("push-job-race-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("relay-job-race-{}", Uuid::new_v4()));
     let jobs = root.join("assistant/jobs");
     let work = root.join("work");
     let run = root.join("run");
-    let database = root.join("push.db");
+    let database = root.join("relay.db");
     let config = root.join("config.toml");
     let codex = root.join("bin/codex");
     std::fs::create_dir_all(&jobs).unwrap();
@@ -97,7 +97,7 @@ fn concurrent_first_runs_on_a_fresh_database_skip_without_sqlite_errors() {
     write_executable(&codex, "#!/bin/sh\nsleep 30\n");
     write_job_and_config(&jobs, &work, &run, &database, &config);
 
-    let binary = env!("CARGO_BIN_EXE_push");
+    let binary = env!("CARGO_BIN_EXE_relay");
     let mut first = spawn_run(binary, &config);
     let mut second = spawn_run(binary, &config);
     wait_for_counts(&database, 1, 1);
@@ -120,11 +120,11 @@ fn concurrent_first_runs_on_a_fresh_database_skip_without_sqlite_errors() {
 
 #[test]
 fn live_cli_is_not_reclaimed_and_crashed_cli_is_recovered() {
-    let root = std::env::temp_dir().join(format!("push-job-crash-{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("relay-job-crash-{}", Uuid::new_v4()));
     let jobs = root.join("assistant/jobs");
     let work = root.join("work");
     let run = root.join("run");
-    let database = root.join("push.db");
+    let database = root.join("relay.db");
     let config = root.join("config.toml");
     let codex = root.join("bin/codex");
     std::fs::create_dir_all(&jobs).unwrap();
@@ -132,8 +132,8 @@ fn live_cli_is_not_reclaimed_and_crashed_cli_is_recovered() {
     write_executable(&codex, "#!/bin/sh\nsleep 30\n");
     write_job_and_config(&jobs, &work, &run, &database, &config);
 
-    let binary = env!("CARGO_BIN_EXE_push");
-    let mut live = push_command(binary, &config)
+    let binary = env!("CARGO_BIN_EXE_relay");
+    let mut live = relay_command(binary, &config)
         .args(["job", "run", "crash-test", "--config"])
         .arg(&config)
         .stdout(Stdio::null())
@@ -142,7 +142,7 @@ fn live_cli_is_not_reclaimed_and_crashed_cli_is_recovered() {
         .unwrap();
     wait_for_state(&database, "running");
 
-    let overlap = push_command(binary, &config)
+    let overlap = relay_command(binary, &config)
         .args(["job", "run", "crash-test", "--config"])
         .arg(&config)
         .output()
@@ -167,7 +167,7 @@ printf '%s\n' '{"type":"thread.started","thread_id":"fresh-thread"}'
 "#,
     );
 
-    let recovered = push_command(binary, &config)
+    let recovered = relay_command(binary, &config)
         .args(["job", "run", "crash-test", "--config"])
         .arg(&config)
         .output()
@@ -187,7 +187,7 @@ printf '%s\n' '{"type":"thread.started","thread_id":"fresh-thread"}'
 }
 
 fn spawn_run(binary: &str, config: &Path) -> std::process::Child {
-    push_command(binary, config)
+    relay_command(binary, config)
         .args(["job", "run", "crash-test", "--config"])
         .arg(config)
         .stdout(Stdio::null())
@@ -217,7 +217,7 @@ fn wait_for_one_exit(
 }
 
 fn run_cli(binary: &str, config: &Path, args: &[&str]) -> std::process::Output {
-    push_command(binary, config)
+    relay_command(binary, config)
         .args(args)
         .arg("--config")
         .arg(config)
@@ -229,7 +229,7 @@ fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn push_command(binary: &str, config: &Path) -> Command {
+fn relay_command(binary: &str, config: &Path) -> Command {
     let mut paths = vec![config.parent().unwrap().join("bin")];
     if let Some(inherited) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&inherited));

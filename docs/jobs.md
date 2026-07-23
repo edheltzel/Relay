@@ -1,18 +1,18 @@
 # Jobs and schedules
 
-Jobs make Push useful while you are not in a conversation. Each job is a
+Jobs make Relay useful while you are not in a conversation. Each job is a
 user-owned Markdown runbook in the configured assistant repository's `jobs/`
 directory. TOML frontmatter defines execution policy; the Markdown body is
 sent verbatim to a fresh backend session.
 
-The schedule definition lives in the same Markdown file as the job. Push
+The schedule definition lives in the same Markdown file as the job. Relay
 evaluates that definition and stores its run and delivery state. For every run:
 
 - `SOUL.md` is supplied automatically as identity and working instructions;
 - files under `context/` are optional shared information and are not inserted
   automatically; keep task-specific instructions in the job;
 - the job body is the fresh request, without chat history or template expansion;
-- `primary_delivery` in Push configuration selects where scheduled results go.
+- `primary_delivery` in Relay configuration selects where scheduled results go.
 
 ## Create a job
 
@@ -46,15 +46,15 @@ Frontmatter fields:
 | `triggers` | no | One or more cron trigger tables |
 
 Unknown fields are errors. The assistant repository is a valid work directory.
-A job work directory may not overlap Push state, database, audit log, job lock
+A job work directory may not overlap Relay state, database, audit log, job lock
 paths, or a loaded config stored outside the assistant repository.
 
 ## Validate and inspect jobs
 
 ```sh
-push job validate
-push job list
-push job show repo-review
+relay job validate
+relay job list
+relay job show repo-review
 ```
 
 Validation reports every valid and invalid file. An invalid job is disabled
@@ -84,10 +84,10 @@ For example, create `<assistant_root>/evals/writing-style.md`:
 Fail work that uses em dashes, unsupported claims, or needlessly complex words.
 ```
 
-After a job returns successfully, Push starts one fresh evaluator session using
+After a job returns successfully, Relay starts one fresh evaluator session using
 the same backend, timeout, and work directory. The evaluator receives the
 original job, final response, and every assigned eval, then must finish with
-`VERDICT: PASS` or `VERDICT: FAIL`. Push disables evaluator shell access,
+`VERDICT: PASS` or `VERDICT: FAIL`. Relay disables evaluator shell access,
 external MCP tools, extensions, browser integrations, and session persistence.
 Codex project instructions are also disabled. Some backends may retain
 non-mutating built-in utility tools. The first version evaluates the returned
@@ -101,12 +101,12 @@ Scheduled delivery includes the evaluation verdict and failure details.
 ## Run a job manually
 
 ```sh
-push job run repo-review
-push job runs repo-review
+relay job run repo-review
+relay job runs repo-review
 ```
 
 A manual run executes in the invoking CLI process and prints its result there.
-It does not proactively message a channel. Push records and claims the run in
+It does not proactively message a channel. Relay records and claims the run in
 SQLite before starting the backend and holds a non-blocking per-job advisory
 lock for the run's lifetime.
 
@@ -140,7 +140,7 @@ Scheduling starts only when the primary destination is enabled and
 allowlisted. A missing or invalid destination disables new scheduled starts
 without affecting conversations or manual jobs.
 
-Push runs at most `jobs_max_workers` scheduled jobs concurrently. It does not
+Relay runs at most `jobs_max_workers` scheduled jobs concurrently. It does not
 catch up cron occurrences missed while offline. Daylight-saving gaps are
 skipped; repeated local times run once at their first instant. Cron expressions
 whose selected months and days can never form a calendar date are rejected
@@ -148,7 +148,7 @@ during job validation.
 
 ## Complete assistant example
 
-The [daily inbox triage job](https://github.com/edheltzel/push/blob/main/examples/assistant/jobs/daily-inbox-triage.md)
+The [daily inbox triage job](https://github.com/edheltzel/relay/blob/master/examples/assistant/jobs/daily-inbox-triage.md)
 keeps global identity separate while making the scheduled runbook self-contained:
 
 ```text
@@ -167,13 +167,13 @@ and primary delivery destination.
 - Every job and evaluator run uses a fresh backend session, without chat history.
 - Codex and Claude jobs bypass interactive permissions so unattended work can
   complete. Evaluators remain restricted.
-- Push does not retry failed or timed-out backend execution because the agent
+- Relay does not retry failed or timed-out backend execution because the agent
   may have completed external side effects before failing.
 - Success, failure, timeout, overlap, and delivery state are stored separately.
 - Scheduled output is persisted before delivery.
 - Delivery retries use the stored result and never rerun the backend.
 - Delivery is claimed across gateway processes. Normal partial-message retries
-  resume from the first unsent chunk. Push checkpoints each successful chunk
+  resume from the first unsent chunk. Relay checkpoints each successful chunk
   and bounds a delivery attempt below its claim lease so an active worker cannot
   be reclaimed. Delivery can still produce an at-least-once duplicate after a
   process crash between a channel send and its checkpoint, or after a
@@ -182,13 +182,13 @@ and primary delivery destination.
 - Queued runs and pending delivery survive restart. Interrupted execution is
   not automatically replayed.
 
-Use `push job runs [<name>]` to inspect execution state, evaluation state,
+Use `relay job runs [<name>]` to inspect execution state, evaluation state,
 delivery attempts, destination, bounded results, and error details.
 
 ## Agent-created jobs
 
 When a user asks for a job, the assistant writes the complete runbook directly
-to `<assistant_root>/jobs/<lowercase-slug>.md` and runs `push job validate`.
+to `<assistant_root>/jobs/<lowercase-slug>.md` and runs `relay job validate`.
 There is no separate draft or approval step. The selected agent's filesystem
 permissions control whether it can change the assistant repository.
 
@@ -197,12 +197,12 @@ instruction that says to propose jobs through approval with the direct-write
 rule above. The gateway's runtime instruction overrides that old rule, but
 updating the repository keeps its checked-in guidance accurate.
 
-Pending job approvals from older Push versions are cancelled during database
+Pending job approvals from older Relay versions are cancelled during database
 migration. Replying to one explains that the job must be requested again.
 
 !!! warning
 
-    Jobs have no interactive approval path. Push runs Codex jobs with full
+    Jobs have no interactive approval path. Relay runs Codex jobs with full
     access and no prompts and Claude jobs in `bypassPermissions` mode. Treat
-    every enabled job as code execution by the Push service user, review
+    every enabled job as code execution by the Relay service user, review
     changes to the assistant repository, and allow only trusted senders.

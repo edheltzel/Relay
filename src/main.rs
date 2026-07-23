@@ -1,4 +1,4 @@
-//! push is a tiny iMessage gateway for personal assistant agents. It polls the
+//! relay is a tiny iMessage gateway for personal assistant agents. It polls the
 //! macOS Messages database for new messages, sends each through a configured
 //! coding-agent backend, and texts the reply back.
 
@@ -30,14 +30,14 @@ mod voice;
 
 use anyhow::{bail, Context, Result};
 
-const DEFAULT_CONFIG_PATH: &str = "~/.push/config.toml";
-const HELP: &str = "Push turns coding agents into a personal assistant you can text.
+const DEFAULT_CONFIG_PATH: &str = "~/.relay/config.toml";
+const HELP: &str = "Relay turns coding agents into a personal assistant you can text.
 
-Usage: push [OPTIONS] [COMMAND]
+Usage: relay [OPTIONS] [COMMAND]
 
 Commands:
   help              Print this help
-  version           Print the installed Push version
+  version           Print the installed Relay version
   init [path]       Create an assistant repository (default: ./assistant)
   doctor            Validate the configuration and dependencies
   reload            Reload the installed gateway service
@@ -49,7 +49,7 @@ Commands:
   job runs [name]   Show job run history
 
 Options:
-  --config <path>   Use a configuration file (default: ~/.push/config.toml)
+  --config <path>   Use a configuration file (default: ~/.relay/config.toml)
   -h, --help        Print help
   -V, --version     Print version
 ";
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Version => {
-            println!("push {}", env!("CARGO_PKG_VERSION"));
+            println!("relay {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Command::Init(path) => {
@@ -86,11 +86,11 @@ async fn main() -> Result<()> {
             println!("    $EDITOR {}/context/README.md", result.root.display());
             println!("  Validate and run:");
             if args.config_path == DEFAULT_CONFIG_PATH {
-                println!("    push doctor");
-                println!("    push");
+                println!("    relay doctor");
+                println!("    relay");
             } else {
-                println!("    push doctor --config {}", result.config_path.display());
-                println!("    push --config {}", result.config_path.display());
+                println!("    relay doctor --config {}", result.config_path.display());
+                println!("    relay --config {}", result.config_path.display());
             }
             Ok(())
         }
@@ -124,12 +124,12 @@ fn missing_config_message(path: &str) -> Option<String> {
     }
     if path == DEFAULT_CONFIG_PATH {
         return Some(format!(
-            "configuration not found at {path}\n\nCreate it with:\n  push init\n\nThen configure a channel and run `push doctor`."
+            "configuration not found at {path}\n\nCreate it with:\n  relay init\n\nThen configure a channel and run `relay doctor`."
         ));
     }
     let path_arg = shell_quote(path);
     Some(format!(
-        "configuration not found at {path}\n\nCreate it with:\n  push init --config {path_arg}\n\nThen configure a channel and run `push doctor --config {path_arg}`."
+        "configuration not found at {path}\n\nCreate it with:\n  relay init --config {path_arg}\n\nThen configure a channel and run `relay doctor --config {path_arg}`."
     ))
 }
 
@@ -451,8 +451,8 @@ mod tests {
                 .unwrap()
                 .replace(['<', '>'], "");
             assert!(
-                reference.contains(&format!("push {command}")),
-                "docs/reference/cli.md does not document `push {command}`"
+                reference.contains(&format!("relay {command}")),
+                "docs/reference/cli.md does not document `relay {command}`"
             );
         }
     }
@@ -582,7 +582,7 @@ mod tests {
         assert_eq!(
             cfg.database_path,
             Path::new(&std::env::var("HOME").unwrap())
-                .join(".push/push.db")
+                .join(".relay/relay.db")
                 .to_string_lossy()
         );
         assert_eq!(
@@ -748,7 +748,7 @@ mod tests {
             format!(
                 "self_handles = [\"me@icloud.com\"]\nassistant_root = {:?}\ndatabase_path = {:?}\n",
                 root,
-                root.join("push.db")
+                root.join("relay.db")
             ),
         )
         .unwrap();
@@ -787,7 +787,7 @@ mod tests {
             r#"self_handles = ["me@icloud.com"]
 
 [assistant]
-name = "push"
+name = "relay"
 "#,
         )
         .unwrap();

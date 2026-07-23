@@ -1,6 +1,6 @@
-# Push Architecture
+# Relay Architecture
 
-Push is one local Rust process. It receives from configured iMessage, Telegram,
+Relay is one local Rust process. It receives from configured iMessage, Telegram,
 and Slack channels, filters messages, loads the configured assistant repository,
 runs a configured agent backend, and sends the
 final reply.
@@ -14,7 +14,7 @@ message gateway -> agent backend -> message gateway
 Ownership is split deliberately:
 
 ```text
-Push runtime         = channels, scheduling, history, security, delivery
+Relay runtime         = channels, scheduling, history, security, delivery
 Assistant repository = SOUL.md, context, jobs, optional project skills
 Agent runtime        = reasoning, tool and skill execution, permissions,
                        global skills, MCP, authentication
@@ -24,7 +24,7 @@ Agent runtime        = reasoning, tool and skill execution, permissions,
 
 ### 1. Gateway First
 
-Push is a messaging gateway for a personal assistant. It should stay small and
+Relay is a messaging gateway for a personal assistant. It should stay small and
 own the durable pieces:
 
 - channels
@@ -53,7 +53,7 @@ Those belong to the selected backend.
 
 ### 3. Outbound connections only
 
-Push polls channel adapters and shells out to local agent commands. It opens no
+Relay polls channel adapters and shells out to local agent commands. It opens no
 server port and accepts no inbound network connection. Telegram uses outbound
 HTTPS long polling and Slack uses an outbound Socket Mode WebSocket.
 
@@ -67,14 +67,14 @@ flowchart LR
     user([You]) -->|iMessage| db[(chat.db)]
     user -->|private chat| tg[Telegram Bot API]
     user -->|app DM| slack[Slack]
-    db -->|poll| push
-    tg -->|long poll| push
-    slack -->|Socket Mode| push
-    subgraph push[Push gateway]
+    db -->|poll| relay
+    tg -->|long poll| relay
+    slack -->|Socket Mode| relay
+    subgraph relay[Relay gateway]
         poller[Channel poller] --> gateway[Gateway loop]
         gateway --> worker[Per-thread worker]
         store[(state.json)] <--> gateway
-        history[(push.db)] <--> gateway
+        history[(relay.db)] <--> gateway
         assistant[/assistant repo: SOUL.md, context, jobs, project skills/] --> worker
         worker --> adapter[Agent adapter]
     end
@@ -142,7 +142,7 @@ sequenceDiagram
     participant P as Poller
     participant G as Gateway
     participant W as Worker
-    participant H as push.db
+    participant H as relay.db
     participant A as Agent backend
     participant S as Sender
 
@@ -193,7 +193,7 @@ RunOutput {
 That keeps the gateway independent of backend-specific mechanics.
 
 Normal resumed turns contain only the new request. Fresh sessions use at most
-20 prior messages from the exact channel-qualified conversation. Push caps each
+20 prior messages from the exact channel-qualified conversation. Relay caps each
 historical message at 4 KiB and the history block at 16 KiB, then JSON-delimits
 roles and content before appending the current user message. This transcript is
 prompt content; `SOUL.md` remains separate instruction context. A recognized
@@ -202,7 +202,7 @@ rehydration. Audit metadata records the rehydrated message count.
 
 ### Claude Code Adapter
 
-Claude Code lets Push choose the session id.
+Claude Code lets Relay choose the session id.
 
 - New conversation: `claude -p --session-id <uuid>`
 - Existing conversation: `claude -p --resume <uuid>`
@@ -231,7 +231,7 @@ Pi creates its own session id and reports it in the first JSON event.
 - Work dir: `assistant_root`
 
 The adapter reads the session header and final assistant `message_end` event.
-Push passes no tool override to Pi. Pi has no native filesystem sandbox or
+Relay passes no tool override to Pi. Pi has no native filesystem sandbox or
 interactive permission prompts, so its own configuration is the boundary.
 
 ## State Model
@@ -260,7 +260,7 @@ interactive permission prompts, so its own configuration is the boundary.
 field named `uuid` also remains for compatibility, but it
 now means "backend session id".
 
-If the configured backend changes for a thread, Push starts a fresh backend
+If the configured backend changes for a thread, Relay starts a fresh backend
 session instead of trying to resume the old runtime's session.
 
 Slack's dedicated receiver commits accepted Socket Mode events to
@@ -318,7 +318,7 @@ stored result. Restart recovery resumes queued work and pending delivery, but
 never reruns a backend run that had already started. A running row is marked
 interrupted only after the released advisory lock proves its executor is gone.
 
-`push.db` stores channel-qualified conversations and their inbound and outbound
+`relay.db` stores channel-qualified conversations and their inbound and outbound
 messages. Accepted inbound messages are inserted before gateway commands or
 backend dispatch. Generated backend, command, and error replies are inserted
 before delivery, with generation and delivery state tracked separately. A
@@ -350,7 +350,7 @@ expired terminal state, so later cancellation cannot overwrite the timeout.
 
 Agent-created jobs live directly under `<assistant_root>/jobs`. The gateway
 includes that absolute path in its in-memory instructions and tells the agent
-to run `push job validate` after a change. Job creation has no separate draft
+to run `relay job validate` after a change. Job creation has no separate draft
 or approval step. The selected agent's filesystem permissions control whether
 it can change the assistant repository.
 
@@ -362,18 +362,18 @@ content logging.
 
 ## Assistant Repository
 
-Push supports one assistant and stores one canonical `assistant_root`. It
-derives `SOUL.md`, `context/`, and `jobs/` from that root. `push init [path]`
+Relay supports one assistant and stores one canonical `assistant_root`. It
+derives `SOUL.md`, `context/`, and `jobs/` from that root. `relay init [path]`
 creates the conventional structure, initializes Git when needed, and persists
 the root through the selected `--config` file. There are no assistant IDs,
 registries, active selections, or multi-assistant commands.
 
-For every conversation and scheduled or manual job run, Push reads `SOUL.md`
+For every conversation and scheduled or manual job run, Relay reads `SOUL.md`
 and appends a gateway-owned footer in memory containing the resolved absolute
 assistant, context, and jobs paths. The footer directs the backend to begin
 with `context/README.md` when useful, protect `SOUL.md` and evals unless asked,
 write requested jobs directly under `jobs/`, and validate them before reporting
-success. Push does not write the footer to the repository or inject all context
+success. Relay does not write the footer to the repository or inject all context
 files into each prompt. The selected backend and its configuration decide what
 to inspect.
 
@@ -403,10 +403,10 @@ the trust boundary. iMessage uses `imessage.self_handles` and
 and `telegram.allow_chat_ids`; Slack uses stable `slack.allow_user_ids` member
 IDs and verifies the authenticated workspace.
 
-Push preserves sandbox, approval, permission-mode, and tool-list settings for
+Relay preserves sandbox, approval, permission-mode, and tool-list settings for
 chats. Codex and Claude jobs bypass interactive permissions so unattended work
 can complete. Every job must use a work directory that does not overlap
-Push-owned state or configuration.
+Relay-owned state or configuration.
 
 ## Roadmap
 

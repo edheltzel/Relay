@@ -1,17 +1,17 @@
 # iMessage
 
-Push supports one-to-one iMessage conversations on macOS. It reads the local
+Relay supports one-to-one iMessage conversations on macOS. It reads the local
 Messages database and sends replies with `osascript`. It does not use a cloud
 iMessage API or expose a network service.
 
 ## Requirements
 
 - macOS with Messages signed in
-- Full Disk Access for the terminal or service process running Push
+- Full Disk Access for the terminal or service process running Relay
 - access to `~/Library/Messages/chat.db`
 - `osascript` on `PATH`
 
-Run `push doctor` from the same user and environment as the long-running
+Run `relay doctor` from the same user and environment as the long-running
 service. A successful interactive check does not prove that a separate service
 account has Full Disk Access.
 
@@ -27,7 +27,7 @@ agent = "codex"
 self_handles = ["you@icloud.com"]
 ```
 
-Push identifies self-chat from the chat identifier and accepts your own
+Relay identifies self-chat from the chat identifier and accepts your own
 messages in that conversation. It adds a reply marker to outbound messages so
 they are not fed back into the agent.
 
@@ -46,15 +46,15 @@ sensitivity.
 Treat every allowed handle as an operator of the configured backend. A sender
 can ask the agent to use any capability allowed by that agent's configuration.
 
-## What Push ignores
+## What Relay ignores
 
 - group chats
 - tapbacks and Messages system rows
 - blank messages
 - messages from handles outside the allowlist
-- Push's own replies containing the built-in Push reply marker
+- Relay's own replies containing the built-in Relay reply marker
 
-The channel expects a recent macOS Messages schema. `push doctor` and runtime
+The channel expects a recent macOS Messages schema. `relay doctor` and runtime
 logs report database access or query failures rather than silently accepting
 no messages.
 
@@ -73,12 +73,12 @@ See [configuration](../configuration.md#routing) for route precedence.
 
 ## Restart behavior
 
-On the first iMessage start, Push records the newest existing Messages row
+On the first iMessage start, Relay records the newest existing Messages row
 without running it. Send a new message after the gateway starts. Later starts
 continue after the last completed row stored in `state.json`.
 
-Push stores the last completed Messages row in `state.json` and accepted
-conversation turns in `push.db`. It advances the cursor only after a row is
+Relay stores the last completed Messages row in `state.json` and accepted
+conversation turns in `relay.db`. It advances the cursor only after a row is
 ignored or completed. An earlier in-flight row prevents later completed rows
 from pushing the cursor past it.
 
@@ -94,7 +94,7 @@ Grant Full Disk Access to the exact terminal or service host, restart that
 process, and rerun:
 
 ```sh
-push doctor
+relay doctor
 ```
 
 ### Messages are ignored

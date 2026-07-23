@@ -12,14 +12,14 @@
 
 ## Summary
 
-Push jobs are user-owned Markdown runbooks stored under
+Relay jobs are user-owned Markdown runbooks stored under
 `<assistant_root>/jobs/`. A job
 contains one instruction body plus execution policy such as its timeout,
 working directory, and backend override.
 Manual and cron starts are triggers attached to the same job rather than
 different job types. Every run uses a fresh backend session. Once the scheduler
 ships, it uses the same SQLite claim and execution path as manual runs,
-allowing scheduling and delivery to remain durable without turning Push into
+allowing scheduling and delivery to remain durable without turning Relay into
 an agent runtime.
 
 ## Goals
@@ -30,7 +30,7 @@ an agent runtime.
   execution.
 - Make scheduling safe across restarts, overlap, timezones, and delivery
   failures.
-- Preserve Push's existing polling-only architecture and backend boundary.
+- Preserve Relay's existing polling-only architecture and backend boundary.
 
 ## Non-goals
 
@@ -43,7 +43,7 @@ an agent runtime.
 
 ## Constraints
 
-- Push has one long-running gateway process with no inbound server port.
+- Relay has one long-running gateway process with no inbound server port.
   Commands may run as short-lived local processes against the same SQLite
   store.
 - Chats use the selected agent's permission controls without overrides. Codex
@@ -52,7 +52,7 @@ an agent runtime.
 - Scheduled work can have external side effects, so duplicate execution is more
   dangerous than skipping a missed run.
 - Job files, `SOUL.md`, and `context/` belong to the Git-versioned assistant
-  repository. Runtime and ledger state remain Push-owned outside it.
+  repository. Runtime and ledger state remain Relay-owned outside it.
 - Existing installations without a jobs directory continue to start normally.
 
 ## Proposed design
@@ -104,7 +104,7 @@ Scheduled example:
 +++
 version = 1
 timeout = "5m"
-workdir = "~/.push/workspaces/morning-agenda"
+workdir = "~/.relay/workspaces/morning-agenda"
 
 [[triggers]]
 id = "weekday-morning"
@@ -128,8 +128,8 @@ identity.
 
 ### Validation and capability ceiling
 
-Push validates all installed jobs during startup preflight and through a
-read-only `push job validate` command. Invalid jobs are disabled, reported
+Relay validates all installed jobs during startup preflight and through a
+read-only `relay job validate` command. Invalid jobs are disabled, reported
 together, and make the validation command return non-zero, but they do not
 prevent channel polling or valid jobs from starting. A missing jobs directory
 and an empty directory are valid. Draft files outside the jobs directory are
@@ -141,7 +141,7 @@ change disables new runs of that job and produces an actionable local error
 without stopping unrelated messaging or jobs. Every manual or scheduled claim
 rereads and validates the exact file bytes, then records their snapshot hash.
 A scheduled occurrence is cancelled if its trigger no longer exists in that
-validated snapshot. Immediately before spawning a backend, Push resolves the
+validated snapshot. Immediately before spawning a backend, Relay resolves the
 work directory again so a path replacement is likely to be detected. This
 path-based check does not eliminate a replacement race between validation and
 child startup. Jobs bypass interactive backend permissions, so OS permissions
@@ -163,7 +163,7 @@ snapshot hash of the validated job, trigger information, scheduled time,
 backend, timeout, and canonical work directory. Editing the
 job affects later runs but not an already claimed run.
 
-Each run starts a fresh Claude Code, Codex, or Pi session. Push supplies the composed
+Each run starts a fresh Claude Code, Codex, or Pi session. Relay supplies the composed
 `SOUL.md`, resolved assistant paths, and gateway policy at instruction priority
 and the job body as the current request. Jobs receive neither backend
 conversation history nor canonical chat history. Their backend session ids are
@@ -172,7 +172,7 @@ directory is stable across runs, so filesystem state may persist even though
 conversation state does not.
 
 After successful execution, a job with assigned evals starts one additional
-fresh session on the same backend in the same work directory. Push supplies the
+fresh session on the same backend in the same work directory. Relay supplies the
 original job, final response, and all assigned eval Markdown, then requires the
 evaluator to end with `VERDICT: PASS` or `VERDICT: FAIL`. Evaluation state and
 details are stored separately from execution and delivery. Evaluation never
@@ -183,7 +183,7 @@ built-in utility tools. The first version evaluates the returned response
 without inspecting work-directory artifacts.
 
 Before backend execution, both manual and scheduled starts attempt a
-non-blocking OS advisory lock for the job under `~/.push/run/locks/`. The
+non-blocking OS advisory lock for the job under `~/.relay/run/locks/`. The
 winning process holds that lock until its run finishes. It then uses one SQLite
 transaction to check queued and running state, record the run, and claim the
 job. A start that loses the file lock or database claim is recorded as
@@ -191,7 +191,7 @@ job. A start that loses the file lock or database claim is recorded as
 the local liveness signal and SQLite is the durable history and uniqueness
 boundary.
 
-`push job run` executes directly in its CLI process after winning the claim.
+`relay job run` executes directly in its CLI process after winning the claim.
 The long-running gateway executes scheduled claims and applies its configured
 worker limit to scheduled work. Explicit operator-run CLI jobs do not consume
 that scheduler limit, but they obey the same per-job overlap rule. This avoids
@@ -200,10 +200,10 @@ while keeping cross-process claims durable. The jobs directory and lock
 directory must be on a local filesystem that provides process-scoped advisory
 locks.
 
-Push does not catch up cron occurrences missed while it was stopped. On
+Relay does not catch up cron occurrences missed while it was stopped. On
 startup it schedules the next future occurrence. A unique ledger key over job,
 trigger id, and scheduled instant prevents the same occurrence from being
-claimed twice after a restart. Push also does not retry failed or timed-out
+claimed twice after a restart. Relay also does not retry failed or timed-out
 agent execution automatically because a backend may have completed side
 effects before failing. The operator can start a new manual run instead.
 
@@ -236,7 +236,7 @@ worker. Exhausted delivery remains `failed` and is visible in the read-only run
 log. Manual runs move directly to `running` in their claim
 transaction and are never handed to the gateway. On restart, valid scheduled
 `queued` rows remain eligible for the gateway because backend execution has not
-begun. Push only marks a `running` row interrupted after it can acquire that
+begun. Relay only marks a `running` row interrupted after it can acquire that
 job's advisory lock, proving no local executor still holds it. If the lock is
 held, recovery leaves the live run unchanged. The same stale-claim check runs
 before each new claim, so a crashed CLI cannot block a job indefinitely even
@@ -250,16 +250,16 @@ content.
 The first runtime exposes read-only listing and inspection plus explicit
 execution:
 
-- `push job validate`
-- `push job list`
-- `push job show <name>`
-- `push job run <name>`
-- `push job runs [<name>]`
+- `relay job validate`
+- `relay job list`
+- `relay job show <name>`
+- `relay job run <name>`
+- `relay job runs [<name>]`
 
-Push is the only writer to the run ledger. The CLI owns the manual run it
+Relay is the only writer to the run ledger. The CLI owns the manual run it
 claims, and the gateway owns scheduled runs. Agents may write requested job
 files directly under `<assistant_root>/jobs` when their filesystem permissions
-allow it, then validate the catalog with `push job validate`.
+allow it, then validate the catalog with `relay job validate`.
 
 ## Alternatives and tradeoffs
 
@@ -320,7 +320,7 @@ fewer moving parts.
   auditable.
 - A process crash can leave external side effects without a successful result.
   Interrupted runs are never automatically replayed.
-- Advisory locking is a local-filesystem assumption. Push rejects a lock setup
+- Advisory locking is a local-filesystem assumption. Relay rejects a lock setup
   it cannot verify rather than relying on SQLite state alone for executor
   liveness.
 - Stored outputs may contain sensitive data. Results and errors must be
@@ -329,7 +329,7 @@ fewer moving parts.
 ## Rollout
 
 1. Ship parsing, validation, listing, inspection, direct manual execution, the
-   SQLite run ledger, and `push job runs` without enabling a scheduler. Every
+   SQLite run ledger, and `relay job runs` without enabling a scheduler. Every
    manual run is claimed and recorded before execution.
 2. Add cron evaluation and primary-channel delivery behind the same
    transactional claim and execution path.

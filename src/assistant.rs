@@ -1,4 +1,4 @@
-//! Assistant repository scaffolding behind `push init`.
+//! Assistant repository scaffolding behind `relay init`.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -29,7 +29,7 @@ const AGENTS: &str = r#"# Assistant repository instructions
 - Treat `SOUL.md` as user-owned identity. Do not edit it unless the user asks.
 - Use `context/` for durable user context and working notes.
 - Treat `evals/` as user-owned evaluation criteria. Do not edit them during evaluation.
-- Store job runbooks in `jobs/`. Create or update them directly when the user asks, then run `push job validate`.
+- Store job runbooks in `jobs/`. Create or update them directly when the user asks, then run `relay job validate`.
 - Keep secrets, sessions, databases, logs, and other runtime state outside this repository.
 "#;
 
@@ -37,15 +37,15 @@ const CLAUDE: &str = "@AGENTS.md\n";
 
 const README: &str = r#"# Assistant
 
-This Git repository contains the durable, user-owned parts of one Push assistant.
+This Git repository contains the durable, user-owned parts of one Relay assistant.
 
 - `SOUL.md` defines the assistant's identity and working style.
 - `AGENTS.md` contains shared agent instructions; `CLAUDE.md` references it.
 - `context/` contains durable context the assistant may read and update.
 - `evals/` contains reusable agent evaluation criteria.
-- `jobs/` contains installed Push job runbooks.
+- `jobs/` contains installed Relay job runbooks.
 
-Push owns channels, scheduling, history, security, and delivery outside this repository. Project skills may live here, while the configured agent runtime owns discovery, execution, global skills, MCP servers, and authentication. Chats preserve configured agent permissions. Codex and Claude jobs bypass interactive permissions so unattended work can finish.
+Relay owns channels, scheduling, history, security, and delivery outside this repository. Project skills may live here, while the configured agent runtime owns discovery, execution, global skills, MCP servers, and authentication. Chats preserve configured agent permissions. Codex and Claude jobs bypass interactive permissions so unattended work can finish.
 "#;
 
 const CONTEXT_README: &str = r#"# Context
@@ -144,7 +144,7 @@ fn inspect_config(config_path: &Path, target: &Path) -> Result<ConfigState> {
     let target = resolve_existing_or_lexical(target)?;
     if configured != target {
         bail!(
-            "{} already configures assistant_root = {}. Push supports one assistant; use that directory or a different --config file.",
+            "{} already configures assistant_root = {}. Relay supports one assistant; use that directory or a different --config file.",
             config_path.display(),
             configured.display()
         );
@@ -553,7 +553,7 @@ mod tests {
     fn creates_structure_initializes_git_and_persists_canonical_root() {
         let parent = temp_dir("assistant-init");
         let target = parent.join("chosen");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
 
         let result = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
 
@@ -583,7 +583,7 @@ mod tests {
     fn repeat_initialization_preserves_user_files_and_configuration() {
         let parent = temp_dir("assistant-reinit");
         let target = parent.join("assistant");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
         fs::write(target.join("SOUL.md"), "My identity\n").unwrap();
         fs::write(target.join("context/private.md"), "Keep me\n").unwrap();
@@ -616,7 +616,7 @@ mod tests {
 
         let parent = temp_dir("assistant-reinit-claude-symlink");
         let target = parent.join("assistant");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
         fs::remove_file(target.join("CLAUDE.md")).unwrap();
         symlink("AGENTS.md", target.join("CLAUDE.md")).unwrap();
@@ -663,7 +663,7 @@ mod tests {
     fn persists_root_at_top_level_when_config_ends_with_a_table() {
         let parent = temp_dir("assistant-table-config");
         let target = parent.join("assistant");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         fs::write(
             &config,
             "channel = 'imessage'\nself_handles = ['me@example.com']\n\n[telegram]\nbot_token = 'secret'\n",
@@ -694,7 +694,7 @@ mod tests {
         let target = parent.join("project");
         fs::create_dir_all(target.join("context")).unwrap();
         fs::write(target.join("notes.txt"), "mine").unwrap();
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
 
         let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
 
@@ -713,7 +713,7 @@ mod tests {
         let parent = temp_dir("assistant-invalid-git");
         let target = parent.join("assistant");
         fs::create_dir_all(target.join(".git")).unwrap();
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
 
         let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
 
@@ -728,7 +728,7 @@ mod tests {
         let parent = temp_dir("assistant-single");
         let first = parent.join("first");
         let second = parent.join("second");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         init(first.to_str().unwrap(), config.to_str().unwrap()).unwrap();
 
         let error = init(second.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
@@ -742,7 +742,7 @@ mod tests {
     fn refuses_legacy_independent_paths_with_migration_help() {
         let parent = temp_dir("assistant-legacy-init");
         let target = parent.join("assistant");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         fs::write(
             &config,
             "assistant_dir = '/old/identity'\njobs_dir = '/old/jobs'\n",
@@ -761,7 +761,7 @@ mod tests {
     fn refuses_job_runtime_state_inside_new_assistant_repository() {
         let parent = temp_dir("assistant-runtime-boundary");
         let target = parent.join("assistant");
-        let config = parent.join("push.toml");
+        let config = parent.join("relay.toml");
         fs::write(
             &config,
             format!("jobs_run_dir = {:?}\n", target.join("run")),

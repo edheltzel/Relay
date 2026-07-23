@@ -78,7 +78,7 @@ mod tests {
     #[tokio::test]
     async fn cancelling_send_kills_in_flight_sender() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "push-imessage-sender-cancellation-{}-{}",
+            "relay-imessage-sender-cancellation-{}-{}",
             std::process::id(),
             uuid::Uuid::new_v4()
         ));

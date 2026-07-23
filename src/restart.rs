@@ -3,8 +3,8 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
-const LAUNCHD_LABEL: &str = "com.edheltzel.push";
-const SYSTEMD_UNIT: &str = "push.service";
+const LAUNCHD_LABEL: &str = "com.edheltzel.relay";
+const SYSTEMD_UNIT: &str = "relay.service";
 
 pub fn gateway() -> Result<()> {
     let command = platform_command()?;
@@ -121,7 +121,7 @@ mod tests {
                 args: vec![
                     "kickstart".to_string(),
                     "-k".to_string(),
-                    "gui/501/com.edheltzel.push".to_string(),
+                    "gui/501/com.edheltzel.relay".to_string(),
                 ],
             }
         );
@@ -136,7 +136,7 @@ mod tests {
                 args: vec![
                     "--user".to_string(),
                     "restart".to_string(),
-                    "push.service".to_string(),
+                    "relay.service".to_string(),
                 ],
             }
         );
@@ -180,7 +180,7 @@ mod tests {
 
         assert!(error
             .to_string()
-            .contains("systemctl --user restart push.service exited with exit status: 5"));
+            .contains("systemctl --user restart relay.service exited with exit status: 5"));
     }
 
     #[test]
@@ -197,6 +197,6 @@ mod tests {
 
         assert!(error
             .to_string()
-            .contains("run systemctl --user restart push.service"));
+            .contains("run systemctl --user restart relay.service"));
     }
 }

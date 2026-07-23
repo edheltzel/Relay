@@ -78,13 +78,13 @@ pub fn test_config() -> crate::config::Config {
 }
 
 pub fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("push-test-{name}-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("relay-test-{name}-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 pub fn temp_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("push-test-{name}-{}", Uuid::new_v4()))
+    std::env::temp_dir().join(format!("relay-test-{name}-{}", Uuid::new_v4()))
 }
 
 pub fn sh_arg(path: &Path) -> String {

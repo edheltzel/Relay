@@ -186,10 +186,10 @@ mod tests {
 
     #[test]
     fn renders_links() {
-        let html = to_telegram_html("[Push](https://github.com/edheltzel/push)");
+        let html = to_telegram_html("[Relay](https://github.com/edheltzel/relay)");
         assert_eq!(
             html,
-            "<a href=\"https://github.com/edheltzel/push\">Push</a>"
+            "<a href=\"https://github.com/edheltzel/relay\">Relay</a>"
         );
     }
 

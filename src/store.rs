@@ -223,7 +223,7 @@ mod tests {
 
     fn temp_state_path() -> String {
         std::env::temp_dir()
-            .join(format!("push-store-test-{}.json", Uuid::new_v4()))
+            .join(format!("relay-store-test-{}.json", Uuid::new_v4()))
             .to_string_lossy()
             .to_string()
     }

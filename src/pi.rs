@@ -62,7 +62,7 @@ impl Runner {
             let stderr = String::from_utf8_lossy(&out.stderr);
             if !req.is_new && missing_resume_error(&stderr) {
                 return Err(RunError::SessionMissing(
-                    "Pi could not find the saved session; Push will rebuild it from conversation history"
+                    "Pi could not find the saved session; Relay will rebuild it from conversation history"
                         .to_string(),
                 ));
             }

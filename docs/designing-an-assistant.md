@@ -5,7 +5,7 @@ explain who the assistant is, what it knows, how recurring work runs, and how
 to judge good results. Keep it small enough that you can inspect and version
 every important instruction.
 
-Push creates the starting structure:
+Relay creates the starting structure:
 
 ```text
 assistant/
@@ -43,7 +43,7 @@ temporary priorities, contact information, and task procedures belong
 elsewhere. A short identity file is easier to reason about and less likely to
 contain conflicting instructions.
 
-Push supplies `SOUL.md` to every conversation and job. It appends its own
+Relay supplies `SOUL.md` to every conversation and job. It appends its own
 gateway safety rules in memory and does not rewrite the file.
 
 ## Organize durable context
@@ -56,7 +56,7 @@ context/
 ├── preferences.md
 ├── people.md
 ├── projects/
-│   ├── push.md
+│   ├── relay.md
 │   └── website.md
 └── processes/
     └── publishing.md
@@ -66,7 +66,7 @@ Keep each file focused. Record facts, decisions, preferences, and current state,
 not complete chat transcripts. Include dates when information will become
 stale, and remove obsolete notes rather than accumulating contradictions.
 
-`context/README.md` should act as the index. Push tells the backend to begin
+`context/README.md` should act as the index. Relay tells the backend to begin
 there when user context is relevant, but it does not inject every context file
 into every prompt.
 
@@ -138,7 +138,7 @@ ln -s ../../skills/youtube .claude/skills/youtube
 ```
 
 Use relative links so the repository remains portable when cloned elsewhere.
-Commit the canonical skill and the links. `push init` does not currently create
+Commit the canonical skill and the links. `relay init` does not currently create
 or synchronize skill links, and Pi skill discovery remains controlled by Pi's
 own configuration.
 
@@ -188,13 +188,13 @@ YOUTUBE_API_KEY=
 ```
 
 Provide real values through the service environment, the selected agent's
-authentication store, or another local secret manager. Push does not load an
+authentication store, or another local secret manager. Relay does not load an
 assistant-root `.env` file automatically. A gitignored `.env` used directly by
 a helper tool is still sensitive local state; restrict it to the service user
 and do not assume `.gitignore` prevents accidental disclosure.
 
 Never commit tokens, OAuth data, session state, conversation databases, audit
-logs, or Push configuration containing credentials. Read [Permissions and
+logs, or Relay configuration containing credentials. Read [Permissions and
 security](security.md) before running an assistant unattended.
 
 ## Grow the assistant deliberately

@@ -15,7 +15,7 @@ use crate::approval::{DeliveryStatus as ApprovalDeliveryStatus, Question};
 const SCHEMA_VERSION: i64 = 10;
 const RETIRED_JOB_APPROVAL_ERROR: &str = "job approval was removed; request direct job creation";
 const MAX_HISTORY_READ_BYTES: usize = 8 * 1024;
-const READ_TRUNCATED: &str = "\n[truncated by push while reading history]";
+const READ_TRUNCATED: &str = "\n[truncated by relay while reading history]";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutboundOrigin {

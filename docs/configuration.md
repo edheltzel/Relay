@@ -1,11 +1,11 @@
 # Configuration
 
-Push reads TOML from `~/.push/config.toml` by default. Pass `--config <path>`
+Relay reads TOML from `~/.relay/config.toml` by default. Pass `--config <path>`
 to use a different file for a gateway, doctor, init, or job command.
 
 ```sh
-push doctor
-push
+relay doctor
+relay
 ```
 
 Paths beginning with `~` are expanded. Invalid values, unknown fields inside
@@ -16,18 +16,18 @@ Create the one assistant repository and persist its root before editing the
 rest of the config:
 
 ```sh
-push init ~/Code/assistant
+relay init ~/Code/assistant
 ```
 
 For a new file, init writes a private, owner-only Telegram and Codex starting
 point with empty `telegram.bot_token` and `telegram.allow_user_ids` values.
-Fill both in before running Push. Push derives `SOUL.md`, `context/`, `evals/`, and `jobs/` from
+Fill both in before running Relay. Relay derives `SOUL.md`, `context/`, `evals/`, and `jobs/` from
 `assistant_root`. At run time it appends their resolved absolute locations to
 the user-owned `SOUL.md` instructions in memory. It does not write machine
 paths into the repository.
 
 Root configuration, route, and primary-delivery tables do not
-yet reject every unknown key. Use the documented names, then run `push doctor`;
+yet reject every unknown key. Use the documented names, then run `relay doctor`;
 do not assume a silent key changed runtime behavior.
 
 ## Minimal configuration
@@ -43,23 +43,23 @@ allow_user_ids = [123456789]
 ```
 
 `channel` is the easiest single-provider setup. `agent` is `claude`, `codex`,
-or `pi`. Push preserves backend permission settings for chats. Codex and Claude
+or `pi`. Relay preserves backend permission settings for chats. Codex and Claude
 jobs bypass interactive permissions so unattended runs can complete.
 
 ### Pi setup
 
 Install Pi from [pi.dev](https://pi.dev/) and configure a model provider or
-complete its authentication as the same user that runs Push. Confirm `pi
+complete its authentication as the same user that runs Relay. Confirm `pi
 --version` works in the service environment, then select it:
 
 ```toml
 agent = "pi"
 ```
 
-Push finds `pi` through `PATH`, runs `pi --print --mode json`, and stores the
+Relay finds `pi` through `PATH`, runs `pi --print --mode json`, and stores the
 session ID from Pi's JSON event stream. It resumes the session with `--session`.
 Clearing a conversation discards that
-mapping, so the next turn creates a fresh Pi session. Push appends `SOUL.md` as
+mapping, so the next turn creates a fresh Pi session. Relay appends `SOUL.md` as
 system instructions, separate from the user message. Pi is not required unless
 the default backend, an enabled route, or `jobs_agent` selects it.
 
@@ -87,7 +87,7 @@ allow_chat_ids = []
 ```
 
 At least one stable numeric user or chat ID is required. Keep the config file
-private. `push init` creates new config files with mode `0600` on Unix. Set
+private. `relay init` creates new config files with mode `0600` on Unix. Set
 `TELEGRAM_BOT_TOKEN` when an environment variable is a better fit. See the
 [Telegram guide](telegram.md).
 
@@ -177,7 +177,7 @@ Thread keys are:
 
 ## Agent permissions
 
-For chats, Push invokes Claude Code, Codex, and Pi without overriding their
+For chats, Relay invokes Claude Code, Codex, and Pi without overriding their
 sandbox, approval mode, or tool lists. Codex and Claude jobs bypass interactive
 permissions because scheduled work has no operator available to approve
 requests. Review [permissions and security](security.md) before enabling jobs.
@@ -240,9 +240,9 @@ requests. Review [permissions and security](security.md) before enabling jobs.
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `assistant_root` | required for new setups | Canonical root of the one assistant repository; `SOUL.md`, `context/`, `evals/`, and `jobs/` are derived |
-| `state_path` | `~/.push/state.json` | Channel cursors and backend session IDs |
-| `database_path` | `~/.push/push.db` | Canonical conversation, approval, and job history |
-| `audit_log_path` | `~/.push/audit.jsonl` | Structured local audit log |
+| `state_path` | `~/.relay/state.json` | Channel cursors and backend session IDs |
+| `database_path` | `~/.relay/relay.db` | Canonical conversation, approval, and job history |
+| `audit_log_path` | `~/.relay/audit.jsonl` | Structured local audit log |
 | `audit_log_content` | `false` | Include message and reply content in audit events |
 
 ### Jobs
@@ -251,10 +251,10 @@ requests. Review [permissions and security](security.md) before enabling jobs.
 | --- | --- | --- |
 | `jobs_agent` | root `agent` | Default jobs backend |
 | `jobs_max_timeout` | `"30m"` | Maximum accepted job timeout |
-| `jobs_run_dir` | `~/.push/run` | Local advisory locks |
+| `jobs_run_dir` | `~/.relay/run` | Local advisory locks |
 | `jobs_max_workers` | `2` | Concurrent scheduled job workers |
 
-Push validates that runtime state, locks, external config files, and job work
+Relay validates that runtime state, locks, external config files, and job work
 directories do not overlap in unsafe ways.
 Runtime state and secrets must stay outside the Git-versioned assistant
 repository.
@@ -290,8 +290,8 @@ configurations should use `[imessage]` and `[telegram]`. JSON configuration and
 gateway permission fields are no longer supported. Configure permissions in
 the selected agent instead.
 
-Push resolves `claude`, `codex`, and `pi` through the service `PATH`. Configure
-the backend's model in that backend rather than in Push. Telegram environment
+Relay resolves `claude`, `codex`, and `pi` through the service `PATH`. Configure
+the backend's model in that backend rather than in Relay. Telegram environment
 tokens always use `TELEGRAM_BOT_TOKEN`; the iMessage reply marker is internal.
 
 Legacy `assistant_dir` and `jobs_dir` settings remain compatible only when the

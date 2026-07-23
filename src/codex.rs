@@ -41,7 +41,7 @@ struct OutputFile {
 impl OutputFile {
     fn create() -> std::io::Result<Self> {
         let path =
-            std::env::temp_dir().join(format!("push-codex-last-message-{}.txt", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("relay-codex-last-message-{}.txt", Uuid::new_v4()));
         OpenOptions::new()
             .write(true)
             .create_new(true)

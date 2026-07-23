@@ -1,4 +1,4 @@
-# Push v0.7.0
+# Relay v0.7.0
 
 - Render Markdown as Telegram HTML for chat and scheduled-job output, with safe
   plain-text fallback when Telegram rejects formatting.
@@ -12,4 +12,4 @@
   fail with migration guidance, backend commands resolve from `PATH`, and
   Telegram environment credentials use `TELEGRAM_BOT_TOKEN`.
 
-**Full changelog:** https://github.com/edheltzel/push/compare/v0.6.0...v0.7.0
+**Full changelog:** https://github.com/edheltzel/relay/compare/v0.6.0...v0.7.0

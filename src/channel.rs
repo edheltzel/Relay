@@ -12,7 +12,7 @@ use crate::slack::{parse_message_target, Slack};
 use crate::telegram::Telegram;
 use crate::voice::AudioClip;
 
-pub(crate) const REPLY_MARKER: &str = "\n\n-- sent by push";
+pub(crate) const REPLY_MARKER: &str = "\n\n-- sent by relay";
 
 #[derive(Debug, Clone)]
 pub struct InboundVoice {
@@ -760,7 +760,7 @@ mod tests {
 
     fn slack() -> Channel {
         let state = std::env::temp_dir()
-            .join(format!("push-channel-slack-{}.json", uuid::Uuid::new_v4()))
+            .join(format!("relay-channel-slack-{}.json", uuid::Uuid::new_v4()))
             .to_string_lossy()
             .to_string();
         Channel::Slack(
@@ -956,7 +956,7 @@ mod tests {
 
     #[test]
     fn telegram_omits_imessage_marker_and_reply_never_exceeds_limit() {
-        let marker = "\n\n-- sent by push";
+        let marker = "\n\n-- sent by relay";
         let chunks = telegram().outbound_chunks(&"x".repeat(crate::telegram::TEXT_LIMIT), marker);
 
         assert_eq!(chunks.len(), 1);
@@ -1010,8 +1010,8 @@ mod tests {
         let channel = imessage();
 
         assert_eq!(
-            channel.outbound_chunks("hello", "\n\n-- sent by push")[0].text,
-            "hello\n\n-- sent by push"
+            channel.outbound_chunks("hello", "\n\n-- sent by relay")[0].text,
+            "hello\n\n-- sent by relay"
         );
     }
 }

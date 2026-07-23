@@ -66,10 +66,10 @@ jobs:
           set -euo pipefail
           tag="${{ github.event.inputs.tag || github.ref_name }}"
           target="$(rustc -Vv | awk '/host:/ { print $2 }')"
-          package="push-${tag}-${target}"
+          package="relay-${tag}-${target}"
 
           mkdir -p "dist/${package}"
-          cp target/release/push "dist/${package}/"
+          cp target/release/relay "dist/${package}/"
           cp README.md LICENSE config.toml.example install.sh "dist/${package}/"
 
           tar -C dist -czf "dist/${package}.tar.gz" "${package}"

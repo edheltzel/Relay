@@ -224,7 +224,7 @@ mod tests {
         let out = runner
             .run_unattended(
                 Request {
-                    session_id: "push-session",
+                    session_id: "relay-session",
                     is_new: true,
                     work_dir: work_dir.to_str().unwrap(),
                     instructions: "assistant identity",
@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(out.reply, "hello");
         assert_eq!(out.session_id, Some("claude-returned".to_string()));
         let args = read_args(&args_path);
-        assert_arg_pair(&args, "--session-id", "push-session");
+        assert_arg_pair(&args, "--session-id", "relay-session");
         assert_arg_pair(&args, "--append-system-prompt", "assistant identity");
         assert_arg_pair(&args, "-p", "hello");
         assert_arg_pair(&args, "--permission-mode", "bypassPermissions");

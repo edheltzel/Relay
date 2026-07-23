@@ -1,9 +1,8 @@
-site_name: Push
+site_name: Relay
 site_description: Turn Claude Code, Codex, or Pi into an always-on personal assistant.
-site_url: https://pushassistant.com/
-repo_url: https://github.com/edheltzel/push
-repo_name: edheltzel/push
-edit_uri: edit/main/docs/
+repo_url: https://github.com/edheltzel/relay
+repo_name: edheltzel/relay
+edit_uri: edit/master/docs/
 docs_dir: docs
 site_dir: site
 strict: true
@@ -29,7 +28,7 @@ theme:
     - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
-      scheme: push-light
+      scheme: relay-light
       primary: custom
       accent: custom
       toggle:
@@ -52,7 +51,7 @@ nav:
       - iMessage: channels/imessage.md
       - Telegram: telegram.md
       - Slack: slack.md
-  - Use Push:
+  - Use Relay:
       - Jobs and schedules: jobs.md
       - Permissions and security: security.md
       - Run as a service: services.md
@@ -94,6 +93,6 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/edheltzel/push
+      link: https://github.com/edheltzel/relay
 
-copyright: Push is open source under the MIT License.
+copyright: Relay is open source under the MIT License.

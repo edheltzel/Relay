@@ -147,7 +147,7 @@ fn filter() -> Channel {
         allow_set: [("15551234567".to_string(), "+15551234567".to_string())]
             .into_iter()
             .collect(),
-        reply_marker: "\n\n-- sent by push".to_string(),
+        reply_marker: "\n\n-- sent by relay".to_string(),
     })
 }
 
@@ -176,13 +176,13 @@ fn group_msg(chat: &str, handle: &str, from_me: bool, text: &str) -> RawMessage 
 
 fn temp_state_path() -> String {
     std::env::temp_dir()
-        .join(format!("push-gateway-test-{}.json", Uuid::new_v4()))
+        .join(format!("relay-gateway-test-{}.json", Uuid::new_v4()))
         .to_string_lossy()
         .to_string()
 }
 
 fn temp_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("push-gateway-{name}-{}", Uuid::new_v4()))
+    std::env::temp_dir().join(format!("relay-gateway-{name}-{}", Uuid::new_v4()))
 }
 
 fn setup_failure_ctx(
@@ -352,7 +352,7 @@ fn non_allowlisted_dropped() {
 
 #[test]
 fn own_reply_dropped() {
-    let m = msg("me@icloud.com", "", true, "an answer\n\n-- sent by push");
+    let m = msg("me@icloud.com", "", true, "an answer\n\n-- sent by relay");
     assert_eq!(filter().accept(&m), None);
 }
 
@@ -627,11 +627,11 @@ async fn fake_channel_e2e_replies_once_ignores_unallowlisted_and_reuses_session(
         [
             (
                 "+15551234567".to_string(),
-                "fake reply: first\n\n-- sent by push".to_string()
+                "fake reply: first\n\n-- sent by relay".to_string()
             ),
             (
                 "+15551234567".to_string(),
-                "fake reply: second\n\n-- sent by push".to_string()
+                "fake reply: second\n\n-- sent by relay".to_string()
             )
         ]
     );
@@ -1225,7 +1225,7 @@ async fn pending_outbound_is_delivered_after_restart_without_backend_rerun() {
         gateway.ctx.sent_replies.lock().unwrap().as_slice(),
         [(
             "me@icloud.com".to_string(),
-            "stored reply\n\n-- sent by push".to_string()
+            "stored reply\n\n-- sent by relay".to_string()
         )]
     );
     assert_eq!(
@@ -1328,7 +1328,7 @@ async fn session_state_save_failure_keeps_reply_for_restart_without_backend_reru
         restarted.ctx.sent_replies.lock().unwrap().as_slice(),
         [(
             "me@icloud.com".to_string(),
-            "fake reply: hello\n\n-- sent by push".to_string()
+            "fake reply: hello\n\n-- sent by relay".to_string()
         )]
     );
     assert_eq!(restarted.store.lock().unwrap().cursor("imessage"), 1);
@@ -1535,7 +1535,7 @@ async fn enabled_channels_process_concurrently_with_isolated_state_and_origin_re
         imessage[0].ctx.sent_replies.lock().unwrap().as_slice(),
         [(
             "+15551234567".to_string(),
-            "fake reply: from imessage\n\n-- sent by push".to_string()
+            "fake reply: from imessage\n\n-- sent by relay".to_string()
         )]
     );
     assert_eq!(

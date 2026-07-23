@@ -1,6 +1,6 @@
-# Running Push as a Service
+# Running Relay as a Service
 
-This guide covers running `push` continuously under a process manager.
+This guide covers running `relay` continuously under a process manager.
 
 The iMessage channel is macOS-only because it reads
 `~/Library/Messages/chat.db` and sends replies with `osascript`. Telegram uses
@@ -9,13 +9,13 @@ under `systemd` on Linux or a VM.
 
 ## Before Installing a Service
 
-Build or install `push`, then run doctor from the same user account that will
+Build or install `relay`, then run doctor from the same user account that will
 own the service:
 
 ```sh
-push init ~/Code/assistant
-# Edit ~/.push/config.toml with your channel settings.
-push doctor
+relay init ~/Code/assistant
+# Edit ~/.relay/config.toml with your channel settings.
+relay doctor
 ```
 
 Use absolute paths in service files. The service user needs:
@@ -55,8 +55,8 @@ Create the log directory:
 mkdir -p ~/Library/Logs
 ```
 
-Create `~/Library/LaunchAgents/com.edheltzel.push.plist`. You can start from
-[`examples/launchd/com.edheltzel.push.plist`](https://github.com/edheltzel/push/blob/main/examples/launchd/com.edheltzel.push.plist)
+Create `~/Library/LaunchAgents/com.edheltzel.relay.plist`. You can start from
+[`examples/launchd/com.edheltzel.relay.plist`](https://github.com/edheltzel/relay/blob/master/examples/launchd/com.edheltzel.relay.plist)
 and replace `YOU` with your macOS user name:
 
 ```xml
@@ -66,17 +66,17 @@ and replace `YOU` with your macOS user name:
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.edheltzel.push</string>
+  <string>com.edheltzel.relay</string>
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOU/.local/bin/push</string>
+    <string>/Users/YOU/.local/bin/relay</string>
     <string>--config</string>
-    <string>/Users/YOU/.push/config.toml</string>
+    <string>/Users/YOU/.relay/config.toml</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/YOU/.push</string>
+  <string>/Users/YOU/.relay</string>
 
   <key>EnvironmentVariables</key>
   <dict>
@@ -90,9 +90,9 @@ and replace `YOU` with your macOS user name:
   <true/>
 
   <key>StandardOutPath</key>
-  <string>/Users/YOU/Library/Logs/push.out.log</string>
+  <string>/Users/YOU/Library/Logs/relay.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/YOU/Library/Logs/push.err.log</string>
+  <string>/Users/YOU/Library/Logs/relay.err.log</string>
 </dict>
 </plist>
 ```
@@ -100,28 +100,28 @@ and replace `YOU` with your macOS user name:
 Load and inspect it:
 
 ```sh
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.edheltzel.push.plist
-launchctl enable gui/$(id -u)/com.edheltzel.push
-launchctl kickstart -k gui/$(id -u)/com.edheltzel.push
-launchctl print gui/$(id -u)/com.edheltzel.push
-tail -f ~/Library/Logs/push.err.log ~/Library/Logs/push.out.log
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.edheltzel.relay.plist
+launchctl enable gui/$(id -u)/com.edheltzel.relay
+launchctl kickstart -k gui/$(id -u)/com.edheltzel.relay
+launchctl print gui/$(id -u)/com.edheltzel.relay
+tail -f ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
 ```
 
-After editing `~/.push/config.toml`, restart the gateway with:
+After editing `~/.relay/config.toml`, restart the gateway with:
 
 ```sh
-push reload
+relay reload
 ```
 
 After changing the plist:
 
 ```sh
-launchctl bootout gui/$(id -u)/com.edheltzel.push
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.edheltzel.push.plist
-launchctl kickstart -k gui/$(id -u)/com.edheltzel.push
+launchctl bootout gui/$(id -u)/com.edheltzel.relay
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.edheltzel.relay.plist
+launchctl kickstart -k gui/$(id -u)/com.edheltzel.relay
 ```
 
-For voice support, prefer `voice.openai_api_key` in the private Push config. An
+For voice support, prefer `voice.openai_api_key` in the private Relay config. An
 `OPENAI_API_KEY` entry in `EnvironmentVariables` remains available as an
 override when service-level secret injection is preferred.
 
@@ -133,26 +133,26 @@ macOS.
 Create the service directories:
 
 ```sh
-mkdir -p ~/.config/push ~/.config/systemd/user ~/.push
+mkdir -p ~/.config/relay ~/.config/systemd/user ~/.relay
 ```
 
-Create `~/.config/systemd/user/push.service`. You can start from
-[`examples/systemd/push.service`](https://github.com/edheltzel/push/blob/main/examples/systemd/push.service):
+Create `~/.config/systemd/user/relay.service`. You can start from
+[`examples/systemd/relay.service`](https://github.com/edheltzel/relay/blob/master/examples/systemd/relay.service):
 
 ```ini
 [Unit]
-Description=Push personal assistant gateway
+Description=Relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/push --config %h/.push/config.toml
-WorkingDirectory=%h/.push
+ExecStart=%h/.local/bin/relay --config %h/.relay/config.toml
+WorkingDirectory=%h/.relay
 Restart=on-failure
 RestartSec=10
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=-%h/.config/push/env
+EnvironmentFile=-%h/.config/relay/env
 
 [Install]
 WantedBy=default.target
@@ -162,27 +162,27 @@ Load and inspect it:
 
 ```sh
 systemctl --user daemon-reload
-systemctl --user enable --now push.service
-systemctl --user status push.service
-journalctl --user -u push.service -f
+systemctl --user enable --now relay.service
+systemctl --user status relay.service
+journalctl --user -u relay.service -f
 ```
 
-After editing `~/.push/config.toml`, restart the gateway with:
+After editing `~/.relay/config.toml`, restart the gateway with:
 
 ```sh
-push reload
+relay reload
 ```
 
-For voice support, prefer `voice.openai_api_key` in `~/.push/config.toml`. As an
+For voice support, prefer `voice.openai_api_key` in `~/.relay/config.toml`. As an
 alternative, create the optional private environment file:
 
 ```sh
-printf 'OPENAI_API_KEY=replace-with-your-openai-api-key\n' > ~/.config/push/env
-chmod 600 ~/.config/push/env
-systemctl --user restart push.service
+printf 'OPENAI_API_KEY=replace-with-your-openai-api-key\n' > ~/.config/relay/env
+chmod 600 ~/.config/relay/env
+systemctl --user restart relay.service
 ```
 
-Keep `~/.push/config.toml` at mode `0600` because it may contain messaging or
+Keep `~/.relay/config.toml` at mode `0600` because it may contain messaging or
 OpenAI credentials. Do not commit this file or print it in
 service logs.
 
@@ -194,30 +194,30 @@ loginctl enable-linger "$USER"
 
 ## Manual Jobs
 
-`push job run <name>` executes in the invoking terminal process, not in the
+`relay job run <name>` executes in the invoking terminal process, not in the
 managed service. Use the same config file so the CLI and service share
-`push.db`, `<assistant_root>/jobs`, and the local per-job lock directory.
+`relay.db`, `<assistant_root>/jobs`, and the local per-job lock directory.
 Invalid job files are reported and disabled individually; they do not stop the
 messaging service.
 
 ## Scheduled Jobs
 
 Cron triggers run inside the managed gateway only when `primary_delivery`
-resolves. Keep `push.db`, `<assistant_root>/jobs`, and `jobs_run_dir` on
+resolves. Keep `relay.db`, `<assistant_root>/jobs`, and `jobs_run_dir` on
 persistent local storage. Restarting the service resumes queued runs and
 pending result delivery; it does not catch up missed cron times or rerun
-interrupted agent execution. Use `push job runs` to distinguish execution state
+interrupted agent execution. Use `relay job runs` to distinguish execution state
 from delivery attempts.
 
 ## Agent-created jobs
 
 When asked, the agent writes jobs directly under `<assistant_root>/jobs` and
-runs `push job validate`. There is no approval step. The agent's configuration
+runs `relay job validate`. There is no approval step. The agent's configuration
 decides whether it may write to the assistant repository.
 
 ## Restart Behavior
 
-Push only advances the selected channel cursor after a message is ignored or
+Relay only advances the selected channel cursor after a message is ignored or
 completed. If the process stops during an in-flight backend run, that message
 can be retried after restart. This avoids silently losing accepted messages,
 but it can repeat backend work if the process stops before the result is
@@ -233,9 +233,9 @@ is completed.
 Managed services run without a person watching the terminal. An allowed sender
 can instruct the configured backend to use its tools, subject to your backend
 settings. Keep `imessage.allow_from` narrow and configure each selected agent
-for unattended use. Push preserves backend permissions for chats. Codex and
+for unattended use. Relay preserves backend permissions for chats. Codex and
 Claude jobs bypass interactive permissions so they can finish without an
-operator. Jobs are kept away from Push-owned paths by work-directory validation.
+operator. Jobs are kept away from Relay-owned paths by work-directory validation.
 
 Store config files, state files, audit logs, backend credentials, and service
 logs with permissions appropriate for the service user. Logs may contain

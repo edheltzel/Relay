@@ -11,7 +11,7 @@ fn help_commands_print_usage_without_creating_files() {
     std::fs::create_dir_all(&workdir).unwrap();
 
     for args in [&["help"][..], &["init", "--help"][..]] {
-        let output = Command::new(env!("CARGO_BIN_EXE_push"))
+        let output = Command::new(env!("CARGO_BIN_EXE_relay"))
             .args(args)
             .current_dir(&workdir)
             .env("HOME", &home)
@@ -24,7 +24,7 @@ fn help_commands_print_usage_without_creating_files() {
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("Usage: push"));
+        assert!(stdout.contains("Usage: relay"));
         assert!(stdout.contains("reload"));
         assert!(stdout.contains("restart"));
         assert!(output.stderr.is_empty());
@@ -43,7 +43,7 @@ fn version_commands_print_version_without_creating_files() {
     std::fs::create_dir_all(&workdir).unwrap();
 
     for args in [&["version"][..], &["--version"][..], &["-V"][..]] {
-        let output = Command::new(env!("CARGO_BIN_EXE_push"))
+        let output = Command::new(env!("CARGO_BIN_EXE_relay"))
             .args(args)
             .current_dir(&workdir)
             .env("HOME", &home)
@@ -53,7 +53,7 @@ fn version_commands_print_version_without_creating_files() {
         assert!(output.status.success());
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            format!("push {}", env!("CARGO_PKG_VERSION"))
+            format!("relay {}", env!("CARGO_PKG_VERSION"))
         );
         assert!(output.stderr.is_empty());
     }
@@ -69,7 +69,7 @@ fn init_without_path_creates_assistant_in_current_directory() {
     let workdir = root.join("workdir");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::create_dir_all(&workdir).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .arg("init")
         .current_dir(&workdir)
         .env("HOME", &home)
@@ -91,7 +91,7 @@ fn init_without_path_creates_assistant_in_current_directory() {
     assert!(assistant.join("evals").is_dir());
     assert!(assistant.join("jobs").is_dir());
     assert!(assistant.join(".git").exists());
-    let config_path = home.join(".push/config.toml");
+    let config_path = home.join(".relay/config.toml");
     let config = std::fs::read_to_string(&config_path).unwrap();
     assert!(!workdir.join("config.toml").exists());
     assert!(config.contains("channel = \"telegram\""));
@@ -120,18 +120,18 @@ fn init_without_path_creates_assistant_in_current_directory() {
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Review or configure the channel and its allowlist:"));
-    assert!(stdout.contains("push doctor"));
-    assert!(!stdout.contains("push doctor --config"));
+    assert!(stdout.contains("relay doctor"));
+    assert!(!stdout.contains("relay doctor --config"));
     assert!(stdout.contains(&format!("$EDITOR {}", config_path.display())));
     assert!(
         stdout
             .find(&format!("$EDITOR {}", config_path.display()))
             .unwrap()
-            < stdout.find("push doctor").unwrap()
+            < stdout.find("relay doctor").unwrap()
     );
     assert!(stdout.contains("SOUL.md"));
 
-    let run_output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let run_output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .current_dir(&workdir)
         .env("HOME", &home)
         .output()
@@ -148,10 +148,10 @@ fn init_without_path_creates_assistant_in_current_directory() {
 fn init_expands_home_in_requested_path() {
     let root = temp_dir("home");
     let home = root.join("home");
-    let config = root.join("push.toml");
+    let config = root.join("relay.toml");
     std::fs::create_dir_all(&home).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .args(["init", "~/chosen", "--config"])
         .arg(&config)
         .env("HOME", &home)
@@ -181,7 +181,7 @@ fn run_without_default_config_reports_first_run_guidance() {
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .current_dir(&root)
         .env("HOME", &home)
         .output()
@@ -189,9 +189,9 @@ fn run_without_default_config_reports_first_run_guidance() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("configuration not found at ~/.push/config.toml"));
-    assert!(stderr.contains("Create it with:\n  push init"));
-    assert!(!stderr.contains("push init --config"));
+    assert!(stderr.contains("configuration not found at ~/.relay/config.toml"));
+    assert!(stderr.contains("Create it with:\n  relay init"));
+    assert!(!stderr.contains("relay init --config"));
     assert!(stderr.contains("Then configure a channel"));
     assert!(!stderr.contains("Caused by:"));
     let _ = std::fs::remove_dir_all(root);
@@ -201,11 +201,11 @@ fn run_without_default_config_reports_first_run_guidance() {
 fn run_reads_existing_default_config_from_home() {
     let root = temp_dir("existing-default-config");
     let home = root.join("home");
-    let config_dir = home.join(".push");
+    let config_dir = home.join(".relay");
     std::fs::create_dir_all(&config_dir).unwrap();
     std::fs::write(config_dir.join("config.toml"), "invalid = [").unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .current_dir(&root)
         .env("HOME", &home)
         .output()
@@ -260,7 +260,7 @@ fn restart_and_reload_invoke_the_platform_service_manager() {
 
     for command in ["restart", "reload"] {
         let _ = std::fs::remove_file(&args_path);
-        let output = Command::new(env!("CARGO_BIN_EXE_push"))
+        let output = Command::new(env!("CARGO_BIN_EXE_relay"))
             .arg(command)
             .env("PATH", &path)
             .env("PUSH_RESTART_ARGS_PATH", &args_path)
@@ -281,9 +281,9 @@ fn restart_and_reload_invoke_the_platform_service_manager() {
             let lines = args.lines().collect::<Vec<_>>();
             assert_eq!(&lines[..2], &["kickstart", "-k"]);
             assert!(lines[2].starts_with("gui/"));
-            assert!(lines[2].ends_with("/com.edheltzel.push"));
+            assert!(lines[2].ends_with("/com.edheltzel.relay"));
         } else {
-            assert_eq!(args, "--user\nrestart\npush.service\n");
+            assert_eq!(args, "--user\nrestart\nrelay.service\n");
         }
     }
     let _ = std::fs::remove_dir_all(root);
@@ -325,7 +325,7 @@ fn reload_runs_the_service_manager_when_stdout_is_closed() {
     let (closed_stdout, reader) = UnixStream::pair().unwrap();
     drop(reader);
     let closed_stdout = OwnedFd::from(closed_stdout);
-    let status = Command::new(env!("CARGO_BIN_EXE_push"))
+    let status = Command::new(env!("CARGO_BIN_EXE_relay"))
         .arg("reload")
         .env("PATH", path)
         .env("PUSH_RESTART_ARGS_PATH", &args_path)
@@ -343,7 +343,7 @@ fn assert_missing_default_config_guidance(args: &[&str]) {
     let home = root.join("home");
     std::fs::create_dir_all(&home).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .args(args)
         .current_dir(&root)
         .env("HOME", &home)
@@ -356,8 +356,8 @@ fn assert_missing_default_config_guidance(args: &[&str]) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(combined.contains("configuration not found at ~/.push/config.toml"));
-    assert!(combined.contains("Create it with:\n  push init"));
+    assert!(combined.contains("configuration not found at ~/.relay/config.toml"));
+    assert!(combined.contains("Create it with:\n  relay init"));
     assert!(!combined.contains("config.toml.example"));
     let _ = std::fs::remove_dir_all(root);
 }
@@ -367,7 +367,7 @@ fn run_with_missing_custom_config_reports_selected_path() {
     let root = temp_dir("missing-custom-config");
     let config = root.join("custom config's.toml");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .args(["--config", config.to_str().unwrap()])
         .output()
         .unwrap();
@@ -375,7 +375,7 @@ fn run_with_missing_custom_config_reports_selected_path() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     let quoted_path = format!("'{}'", config.display().to_string().replace('\'', "'\\''"));
-    let expected = format!("push init --config {quoted_path}");
+    let expected = format!("relay init --config {quoted_path}");
     assert!(stderr.contains(&expected));
     assert!(!stderr.contains("read config"));
     let _ = std::fs::remove_dir_all(root);
@@ -390,7 +390,7 @@ fn run_with_dangling_config_symlink_preserves_load_error() {
     let config = root.join("config.toml");
     symlink(root.join("missing-target.toml"), &config).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_push"))
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
         .args(["--config", config.to_str().unwrap()])
         .output()
         .unwrap();
@@ -403,7 +403,7 @@ fn run_with_dangling_config_symlink_preserves_load_error() {
 }
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("push-init-cli-{name}-{}", Uuid::new_v4()));
+    let path = std::env::temp_dir().join(format!("relay-init-cli-{name}-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&path).unwrap();
     path
 }
