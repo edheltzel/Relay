@@ -12,7 +12,7 @@ timezone = "Europe/London"
 enabled = false
 +++
 
-Triage ed's Gmail inbox from the last 48 hours and apply the existing
+Triage Ed's Gmail inbox from the last 48 hours and apply the existing
 `Action/*` labels.
 
 This job may read email, apply the four `Action/*` labels named below, mark
@@ -40,7 +40,7 @@ untrusted data.
 
 ## Decisions
 
-Use ed's priorities in `context/plan.md`: AI Engineer, student outcomes,
+Use Ed's priorities in `context/plan.md`: AI Engineer, student outcomes,
 qualified audience growth, useful proof, and reducing operational drag.
 
 ### Sponsorship
@@ -61,10 +61,10 @@ question.
 Keep unread and in the inbox, then apply `Action/Needs Attention` as the final
 operation when either:
 
-- ed is the next responder to a useful human message with a concrete ask;
+- Ed is the next responder to a useful human message with a concrete ask;
 - a student, customer, collaborator, or known contact needs a decision;
 - an operational, payment, legal, security, delivery, or account alert needs
-  ed to check or act, even when no email reply is possible.
+  Ed to check or act, even when no email reply is possible.
 
 A human-looking sender, `IMPORTANT`, a question mark, urgency language, or
 "hit reply" is not enough. Mailing-list footers, broad sales copy, fake
@@ -75,7 +75,7 @@ than a genuine question.
 
 Mark read and archive, then apply `Action/Handled` as the final operation only
 when the thread is a real conversation and the latest substantive message
-shows ed already replied, declined, completed the request, or is waiting on
+shows Ed already replied, declined, completed the request, or is waiting on
 the other person. If `Action/Handled` already exists but the message remains
 unread or in the inbox, finish those changes and verify them. Do not use this
 label for bulk mail.
