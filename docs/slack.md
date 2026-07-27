@@ -76,8 +76,11 @@ not document an idempotency key for `chat.postMessage`, so a network failure
 after Slack accepts a send can still produce an ambiguous delivery.
 
 Web API rate limits are retried once using Slack's `Retry-After` header, then
-the normal Relay delivery retry path applies. Replies are split at 4,000 Unicode
-characters. Slack voice messages and replies are not supported.
+the normal Relay delivery retry path applies. Relay converts model-generated
+Markdown to Slack `mrkdwn` before splitting replies into independently valid
+messages of at most 4,000 Unicode characters. Formatting delimiters, quote
+prefixes, links, and Slack escape entities stay intact across chunk boundaries.
+Slack voice messages and replies are not supported.
 
 For scheduled delivery, use an allowlisted Slack user ID:
 
