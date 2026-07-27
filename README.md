@@ -2,13 +2,14 @@
 
 # Relay
 
-### Text your coding agent from anywhere.
+### Your agent stays on your machine. Relay keeps it within reach.
 
-Use Claude Code, Codex, or Pi through Telegram, iMessage, or Slack. Run work on
-a schedule. Keep Relay, your agent, and your assistant files on your own
-machine.
+Relay is the thin wire between your phone and the coding agent already
+configured on your machine. Send a chat message or schedule a Markdown job;
+Relay carries the request in and the answer back without replacing your
+agent's models, tools, skills, or permissions.
 
-[![CI](https://github.com/edheltzel/relay/actions/workflows/ci.yml/badge.svg)](https://github.com/edheltzel/relay/actions/workflows/ci.yml)
+[![CI](https://github.com/edheltzel/Relay/actions/workflows/ci.yml/badge.svg)](https://github.com/edheltzel/Relay/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-read-12756f)](docs/index.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111417)](LICENSE)
 
@@ -18,9 +19,10 @@ machine.
 
 ## How to send your first message
 
-The fastest setup uses a private Telegram bot. You will install Relay, connect
-one coding agent, and send it a message from your phone. The example uses Codex;
-you can choose Claude Code or Pi by changing one config value.
+Start with Telegram because it is the shortest route to a private round trip.
+By the end, a message from your phone will reach Pi on your computer and its
+reply will return to the same chat. Prefer Claude Code or Codex? Change one
+config value.
 
 ### Prerequisites
 
@@ -37,28 +39,30 @@ Confirm that GitHub CLI can access the repository:
 
 ```sh
 gh auth status
+gh repo view edheltzel/Relay --json nameWithOwner --jq .nameWithOwner
 ```
 
-If it is not signed in, run `gh auth login` and follow the prompts.
+The second command should print `edheltzel/Relay`. If either command fails, run
+`gh auth login`, then try both checks again.
 
 ### 1. Confirm your coding agent works
 
 Run the command for the agent you want Relay to use:
 
-- Codex: `codex --version`
-- Claude Code: `claude --version`
 - Pi: `pi --version`
+- Claude Code: `claude --version`
+- Codex: `codex --version`
 
-Continue when your chosen command prints a version without asking you to sign
-in. Relay uses that agent's existing login, tools, skills, permissions, and
-configuration.
+A version confirms that the command is installed. If you have not used the
+agent as this operating-system user, launch it once and finish signing in.
+Relay then reuses its login, tools, skills, permissions, and configuration.
 
 ### 2. Install Relay
 
 Copy and run this command:
 
 ```sh
-tmp="$(mktemp)" && (trap 'rm -f "$tmp"' 0; gh api -H "Accept: application/vnd.github.raw+json" 'repos/edheltzel/relay/contents/install.sh?ref=master' >"$tmp" && sh "$tmp")
+tmp="$(mktemp)" && (trap 'rm -f "$tmp"' 0; gh api -H "Accept: application/vnd.github.raw+json" 'repos/edheltzel/Relay/contents/install.sh?ref=master' >"$tmp" && sh "$tmp")
 ```
 
 Confirm the installation:
@@ -67,15 +71,9 @@ Confirm the installation:
 relay --version
 ```
 
-If your shell reports `relay: command not found`, add Relay's install directory
-to your current session:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Add the same line to your shell startup file to keep it available in new
-terminals.
+If your shell reports `relay: command not found`, follow the
+[shell-specific PATH instructions](#relay-is-not-found), then run
+`relay --version` again.
 
 ### 3. Create your assistant repository
 
@@ -133,14 +131,15 @@ Open `~/.relay/config.toml` and set the agent, bot token, and numeric user ID:
 ```toml
 channel = "telegram"
 agent = "pi"
-assistant_root = "~/Code/assistant"
+assistant_root = "~/Developer/assistant"
 
 [telegram]
 bot_token = "token-from-BotFather"
 allow_user_ids = [123456789]
 ```
 
-Use `agent = "claude"` for Claude Code or `agent = "codex"` for Codex. Save the file.
+Use `agent = "claude"` for Claude Code or `agent = "codex"` for Codex. Save
+the file.
 `relay init` creates it with owner-only permissions.
 
 For token storage, allowlisting, and routing options, read the
@@ -341,17 +340,20 @@ assistant:
 You can also configure multiple channels and route each chat to a different
 agent. See the [configuration guide](docs/configuration.md).
 
-## What Relay does
+## What makes Relay different
 
-- Uses your existing Claude Code, Codex, or Pi setup
-- Connects private iMessage, Telegram, and Slack chats
-- Keeps conversation and job history between restarts
+Relay owns the handoff, not the intelligence. It does not ship another model
+runtime, tool system, skill format, or memory layer. Instead, it:
+
+- Gives your existing Claude Code, Codex, or Pi setup private chat endpoints
+- Keeps conversation and job history across restarts
 - Runs one-off or scheduled Markdown jobs
 - Opens no inbound network port
 - Keeps assistant instructions in a Git repository you control
 
-Relay is a small bridge, not another agent runtime. Your coding agent still
-controls its models, tools, skills, permissions, and reasoning.
+Your coding agent still decides how to reason, which tools to use, and when it
+needs approval. Relay decides how trusted work arrives and where the result
+goes.
 
 ## How Relay works
 
@@ -371,11 +373,11 @@ flowchart TD
     Agent --> Reply
 ```
 
-## Run work on a schedule
+## Give recurring work a Markdown file
 
-Jobs are Markdown files with a prompt and optional schedule. Relay validates
-them, runs them through your selected coding agent, records the result, and can
-deliver it to a configured chat.
+If you can describe the work in Markdown, Relay can run it now or later. A job
+pairs a prompt with an optional schedule; Relay validates it, runs it through
+your selected coding agent, records the result, and can deliver it to a chat.
 
 - [Create and run a job](docs/jobs.md)
 - [See an email-triage job](examples/assistant/jobs/daily-inbox-triage.md)
@@ -386,7 +388,7 @@ If you use another Rust-supported platform or want to test `master`, install the
 stable Rust toolchain and run:
 
 ```sh
-git clone https://github.com/edheltzel/relay.git
+git clone https://github.com/edheltzel/Relay.git relay
 cd relay
 cargo build --locked --release
 ```
