@@ -1,15 +1,14 @@
-# Relay v0.7.0
+# Relay v0.9.0
 
-- Render Markdown as Telegram HTML for chat and scheduled-job output, with safe
-  plain-text fallback when Telegram rejects formatting.
-- Add reusable agent evaluations for scheduled jobs and persist evaluation,
-  execution, and delivery state separately.
-- Add `help`, `reload`, `restart`, and `version` commands, including `--help`
-  and `--version` flags that work without loading configuration.
-- Recover stalled message queues, support `/stop`, and harden scheduled delivery
-  with durable chunk progress, bounded retries, and impossible-cron validation.
-- Add configurable voice credentials and voices. Removed runtime settings now
-  fail with migration guidance, backend commands resolve from `PATH`, and
-  Telegram environment credentials use `TELEGRAM_BOT_TOKEN`.
+- Trust project-local Pi resources for unattended jobs only when the canonical
+  working directory is exactly `assistant_root`; external work directories and
+  evaluators run with `--no-approve`.
+- Create and repair runtime state and audit files with owner-only permissions,
+  preserve atomic state replacement, and escape control characters in
+  `relay job list` without obscuring printable diagnostics.
+- Render Slack replies as `mrkdwn` before bounded chunking, preserving links,
+  code, styles, quote prefixes, and escape entities across message boundaries.
+- Keep oversized-link fallbacks readable without splitting Slack escape
+  entities, closing an edge case still present in upstream v0.9.0.
 
-**Full changelog:** https://github.com/edheltzel/relay/compare/v0.6.0...v0.7.0
+**Full changelog:** https://github.com/edheltzel/relay/compare/v0.8.2...v0.9.0
