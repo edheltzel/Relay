@@ -43,8 +43,8 @@ allow_user_ids = [123456789]
 ```
 
 `channel` is the easiest single-provider setup. `agent` is `claude`, `codex`,
-or `pi`. Relay preserves backend permission settings for chats. Codex and Claude
-jobs bypass interactive permissions so unattended runs can complete.
+or `pi`. Relay preserves backend permission settings for chats. Unattended jobs
+use the backend-specific permission behavior described below.
 
 ### Pi setup
 
@@ -62,6 +62,13 @@ Clearing a conversation discards that
 mapping, so the next turn creates a fresh Pi session. Relay appends `SOUL.md` as
 system instructions, separate from the user message. Pi is not required unless
 the default backend, an enabled route, or `jobs_agent` selects it.
+
+For unattended jobs, Relay passes `--approve` only when the canonical job
+working directory is exactly `assistant_root`, allowing that trusted
+repository's project-local Pi skills and settings to load. A job with an
+explicit external working directory receives `--no-approve`. Evaluators also
+receive `--no-approve` and continue to run without tools, extensions, skills,
+prompt templates, context files, or saved sessions.
 
 ## Channels
 
@@ -180,7 +187,10 @@ Thread keys are:
 For chats, Relay invokes Claude Code, Codex, and Pi without overriding their
 sandbox, approval mode, or tool lists. Codex and Claude jobs bypass interactive
 permissions because scheduled work has no operator available to approve
-requests. Review [permissions and security](security.md) before enabling jobs.
+requests. Pi jobs explicitly approve project-local resources only when their
+canonical working directory equals `assistant_root`; external working
+directories and evaluators receive `--no-approve`. Review
+[permissions and security](security.md) before enabling jobs.
 
 ## Settings reference
 

@@ -1941,6 +1941,8 @@ async fn execute(cfg: &Config, job: &Job) -> std::result::Result<String, Executi
     let runner = Runner::for_backend(job.backend, cfg);
     let session_id = runner.initial_session_id();
     let workdir = job.workdir.to_string_lossy().to_string();
+    let trust_project_resources = std::fs::canonicalize(&cfg.assistant_root)
+        .is_ok_and(|assistant_root| assistant_root == current_workdir);
     cfg.backend_context_dir()
         .map_err(|error| ExecutionError::Failed(format!("prepare assistant context: {error}")))?;
     let request = Request {
@@ -1957,7 +1959,10 @@ async fn execute(cfg: &Config, job: &Job) -> std::result::Result<String, Executi
         workdir,
         humantime::format_duration(job.timeout),
     );
-    match runner.run_unattended(request, job.timeout).await {
+    match runner
+        .run_unattended(request, job.timeout, trust_project_resources)
+        .await
+    {
         Ok(output) => Ok(output.reply),
         Err(RunError::Timeout) => Err(ExecutionError::Timeout),
         Err(RunError::Failed(error) | RunError::SessionMissing(error)) => {
@@ -1980,17 +1985,24 @@ fn bound_result(value: &str) -> String {
 
 pub fn format_catalog_table(catalog: &Catalog) -> String {
     let header = ("NAME", "STATUS", "DETAIL");
-    let mut rows: Vec<(String, &'static str, String)> = catalog
+    let mut rows: Vec<(String, String, String)> = catalog
         .jobs
         .values()
-        .map(|job| (job.name.clone(), "valid", job.backend.as_str().to_string()))
+        .map(|job| {
+            (
+                escape_table_cell(&job.name),
+                "valid".to_string(),
+                escape_table_cell(job.backend.as_str()),
+            )
+        })
         .collect();
-    rows.extend(
-        catalog
-            .errors
-            .iter()
-            .map(|error| (error.name.clone(), "invalid", error.message.clone())),
-    );
+    rows.extend(catalog.errors.iter().map(|error| {
+        (
+            escape_table_cell(&error.name),
+            "invalid".to_string(),
+            escape_table_cell(&error.message),
+        )
+    }));
     rows.sort_by(|a, b| a.0.cmp(&b.0));
 
     if rows.is_empty() {
@@ -2021,6 +2033,18 @@ pub fn format_catalog_table(catalog: &Catalog) -> String {
         ));
     }
     out
+}
+
+fn escape_table_cell(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        if character.is_control() {
+            escaped.extend(character.escape_default());
+        } else {
+            escaped.push(character);
+        }
+    }
+    escaped
 }
 
 pub fn format_job(job: &Job) -> String {
@@ -2291,6 +2315,25 @@ mod tests {
         assert!(!job.triggers[0].enabled);
     }
 
+    #[test]
+    fn catalog_table_escapes_control_characters_in_invalid_jobs() {
+        let catalog = Catalog {
+            jobs: BTreeMap::new(),
+            errors: vec![JobError {
+                name: "bad\nname.md".to_string(),
+                path: PathBuf::from("bad\nname.md"),
+                message: "invalid \"value\" at café\\repo\n\u{1b}[31mred".to_string(),
+            }],
+        };
+
+        let table = format_catalog_table(&catalog);
+
+        assert_eq!(table.lines().count(), 2);
+        assert!(table.contains(r"bad\nname.md"));
+        assert!(table.contains("invalid \"value\" at café\\repo"));
+        assert!(table.contains(r"\n\u{1b}[31mred"));
+        assert!(!table.contains('\u{1b}'));
+    }
     #[test]
     fn validation_enforces_permission_timeout_backend_and_workdir() {
         let jobs_dir = temp_dir("jobs-validation");
@@ -4009,10 +4052,40 @@ printf '%s\n' ok > {}
         let args = std::fs::read_to_string(&args_path).unwrap();
         assert!(args.lines().any(|line| line == "--mode"));
         assert!(args.lines().any(|line| line == "json"));
+        assert!(args.lines().any(|line| line == "--no-approve"));
+        assert!(!args.lines().any(|line| line == "--approve"));
         assert!(!args.lines().any(|line| line == "--session"));
         assert_eq!(
             std::fs::read_to_string(format!("{}.stdin", args_path.to_string_lossy())).unwrap(),
             "\nInspect this directory.\n"
         );
+    }
+
+    #[tokio::test]
+    async fn pi_job_trusts_resources_only_at_the_assistant_root() {
+        let jobs_dir = temp_dir("jobs-pi-assistant-root");
+        let database = temp_path("jobs-pi-assistant-root-db");
+        let run_dir = temp_dir("jobs-pi-assistant-root-run");
+        let args_path = temp_path("jobs-pi-assistant-root-args");
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\ncat > {}.stdin\nprintf '%s\\n' '{{\"type\":\"session\",\"id\":\"pi-job-session\"}}'\nprintf '%s\\n' '{{\"type\":\"message_end\",\"message\":{{\"role\":\"assistant\",\"content\":[{{\"type\":\"text\",\"text\":\"pi result\"}}],\"stopReason\":\"stop\"}}}}'\n",
+            sh_arg(&args_path),
+            sh_arg(&args_path)
+        );
+        let cli = FakeCli::new("pi", &script);
+        let mut cfg = cfg(&jobs_dir, &database, &run_dir);
+        cfg.agent_commands.pi = cli.bin();
+        let runbook =
+            "+++\nversion = 1\ntimeout = \"5s\"\nbackend = \"pi\"\n+++\n\nInspect this directory.\n";
+        write_job(&jobs_dir, "pi-job", runbook);
+
+        let output = run_manual(&cfg, Catalog::load_named(&cfg, "pi-job").unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(output.1, "pi result");
+        let args = std::fs::read_to_string(args_path).unwrap();
+        assert!(args.lines().any(|line| line == "--approve"));
+        assert!(!args.lines().any(|line| line == "--no-approve"));
     }
 }

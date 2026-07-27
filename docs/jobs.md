@@ -40,7 +40,7 @@ Frontmatter fields:
 | --- | --- | --- |
 | `version` | yes | Format version, currently `1` |
 | `timeout` | yes | Positive duration no greater than `jobs_max_timeout` |
-| `workdir` | no | Existing working directory for the backend; defaults to `assistant_root` |
+| `workdir` | no | Existing working directory for the backend; defaults to `assistant_root`; Pi trusts project-local resources only at that default root |
 | `backend` | no | `claude`, `codex`, or `pi`; defaults to `jobs_agent`, then root `agent` |
 | `evals` | no | Reusable Markdown agent eval names from `<assistant_root>/evals/` |
 | `triggers` | no | One or more cron trigger tables |
