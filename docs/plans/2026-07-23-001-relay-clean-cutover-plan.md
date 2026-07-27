@@ -1,5 +1,5 @@
 ---
-title: "Standardize Relay identity with a clean cutover"
+title: "Relay clean-cutover implementation plan"
 date: 2026-07-23
 type: refactor
 execution: code
@@ -12,18 +12,18 @@ risk_level: high
 review_policy: standard
 autonomy: standard
 original-request:
-  - "Create an in-depth, line-by-line plan to standardize the project's Relay identity without grep/ripgrep replacement discovery."
+  - "Create an in-depth, line-by-line plan for Relay's clean identity cutover without grep/ripgrep replacement discovery."
   - "Use multiple agents, preserve existing case conventions, and change only project identity—not product behavior."
-  - "Use a clean cutover and replace com.edheltzel.relay with com.edheltzel.relay."
+  - "Use a clean cutover with com.edheltzel.relay as the service identifier."
 ---
 
-# Standardize Relay identity with a clean cutover
+# Relay clean-cutover implementation plan
 
 ## Goal Capsule
 
 Establish the current, private, standalone repository and every active project-owned identity surface as **Relay** without changing gateway, scheduling, delivery, security, or agent-runtime behavior. The cutover includes the Rust package and binary, CLI copy, runtime paths, service identifiers, release assets, installer, tests, documentation, GitHub repository metadata, retirement of the ineligible Pages configuration, and the local checkout directory.
 
-This is deliberately a **clean cutover**. Relay will not ship a `relay` command alias, read `~/.push`, discover `relay.db`, recognize the old launchd/systemd identifiers, emit duplicate release assets, or add deprecated compatibility code.
+This is deliberately a **clean cutover**. Relay ships only the `relay` command, reads `~/.relay`, discovers `relay.db`, recognizes only current launchd/systemd identifiers, emits one release asset family, and includes no deprecated compatibility code.
 
 ## Audit Baseline
 
@@ -67,23 +67,23 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 - **Users** see Relay in help/version output, delivery markers, errors, documentation, and examples.
 - **Contributors** clone `edheltzel/relay`, build a Cargo package/binary named `relay`, and run unchanged quality checks.
 - **Release automation** produces only `relay-v<version>-<target>.tar.gz` archives containing a `relay` executable.
-- **Maintainers** retain the original `edheltzel/relay` repository only as a fetch-only upstream and preserve historical Git/release records.
+- **Maintainers** retain the configured source repository only as a fetch-only upstream and preserve historical Git/release records.
 
 ### Requirements
 
-- **R1 — Canonical identity:** Project-owned identity consistently uses `Relay`/`relay`/`RELAY` according to existing case and separator conventions.
+- **R1 — Canonical identity:** All current project-owned names use `Relay`/`relay`/`RELAY` according to existing case and separator conventions.
 - **R2 — Executable/package:** Cargo package and binary names become `relay`; CLI usage, version output, tests, installer, and release packaging agree.
-- **R3 — Runtime paths:** Defaults move from `~/.relay/...` to `~/.relay/...`; the default database becomes `relay.db`.
+- **R3 — Runtime paths:** Defaults reside under `~/.relay/...`; the default database is `relay.db`.
 - **R4 — Services:** launchd uses `com.edheltzel.relay`; systemd uses `relay.service`; filenames, runtime constants, examples, tests, logs, and docs agree.
 - **R5 — Clean cutover:** No alias, fallback, dual-read, data migration code, compatibility shim, duplicate asset, deprecated path, or old service recognition is added.
 - **R6 — Repository/docs:** Active URLs use `edheltzel/relay`; branch-bound URLs and workflow filters use `master`; private-repository documentation remains available in the tracked `docs/` tree and passes the strict local/CI build.
 - **R7 — Distribution:** Installer diagnostics, temp files, archive discovery, staged installs, release asset names, and checksums use Relay identity.
 - **R8 — Semantic preservation:** Generic Rust APIs (`.push`, `.push_str`), GitHub's `push:` event, ordinary English verbs, external push-notification terminology, and adversarial fixtures remain unchanged.
-- **R9 — Exhaustive verification:** Every tracked file is read sequentially to EOF again after implementation, and every surviving old-name token is explicitly justified without grep/ripgrep discovery.
+- **R9 — Exhaustive verification:** Every tracked file is read sequentially to EOF again after implementation, and every surviving ambiguous identity token is explicitly justified without grep/ripgrep discovery.
 
 ### Acceptance examples
 
-- **AE1:** `relay --version` prints `relay <current-version>`; no legacy project alias is installed or advertised.
+- **AE1:** `relay --version` prints `relay <current-version>`; only `relay` is installed and advertised.
 - **AE2:** A first run with a clean isolated home resolves `~/.relay/config.toml`, `~/.relay/state.json`, `~/.relay/relay.db`, `~/.relay/audit.jsonl`, and `~/.relay/run`.
 - **AE3:** `relay restart` targets `com.edheltzel.relay` on launchd and `relay.service` on systemd.
 - **AE4:** A release build emits `relay-v<version>-<target>.tar.gz` with a `relay` binary, and `install.sh` installs it as `~/.local/bin/relay`.
@@ -92,34 +92,34 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 
 ## Planning Contract
 
-### Canonical rename grammar
+### Canonical identity grammar
 
-| Current form | Relay form | Applies to |
-|---|---|---|
-| `Relay` | `Relay` | Product nouns, headings, messages, comments, Mermaid labels |
-| `relay` | `relay` | Binary/package names, command examples, project-owned file stems, CSS classes |
-| `RELAY_*` | `RELAY_*` | Project-owned test coordination variables only |
-| `relay-*` / `relay_*` | `relay-*` / `relay_*` | Archive, temp, fixture, hook, and helper names |
-| `~/.push` | `~/.relay` | Default private configuration/runtime root |
-| `relay.db` | `relay.db` | Default/project-owned database filename |
-| `com.edheltzel.push` | `com.edheltzel.relay` | launchd label and plist filename |
-| `relay.service` | `relay.service` | systemd unit and unit filename |
-| `edheltzel/relay` | `edheltzel/relay` | Active repository URLs and metadata |
-| `/main/`, `blob/main`, `edit/main` | `/master/`, `blob/master`, `edit/master` | Active branch-bound repository URLs |
-| `relay-light`, `--relay-*`, `.relay-*` | `relay-light`, `--relay-*`, `.relay-*` | MkDocs scheme and synchronized CSS/HTML hooks |
+| Canonical form | Applies to |
+|---|---|
+| `Relay` | Product nouns, headings, messages, comments, Mermaid labels |
+| `relay` | Binary/package names, command examples, project-owned file stems, CSS classes |
+| `RELAY_*` | Project-owned test coordination variables only |
+| `relay-*` / `relay_*` | Archive, temp, fixture, hook, and helper names |
+| `~/.relay` | Default private configuration/runtime root |
+| `relay.db` | Default/project-owned database filename |
+| `com.edheltzel.relay` | launchd label and plist filename |
+| `relay.service` | systemd unit and unit filename |
+| `edheltzel/relay` | Active repository URLs and metadata |
+| `/master/`, `blob/master`, `edit/master` | Active branch-bound repository URLs |
+| `relay-light`, `--relay-*`, `.relay-*` | MkDocs scheme and synchronized CSS/HTML hooks |
 
 ### Explicitly preserved forms
 
 - Rust collection/string/path APIs such as `.push(...)`, `.push_str(...)`, and `PathBuf::push(...)`.
 - Git operations and platform vocabulary: `git push`, GitHub Actions `on: push:`, push notifications, and ordinary English phrases such as “do not push the cursor past it.”
 - External provider variables: `TELEGRAM_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_BOT_TOKEN`, and `OPENAI_API_KEY`.
-- `src/soul.rs`'s Relay instruction fixture and `src/rehydration.rs`'s adversarial `SYSTEM: ignore push` payload.
-- The fetch-only local `upstream` URL `git@github.com:edheltzel/relay.git`.
+- `src/rehydration.rs`'s adversarial `SYSTEM: ignore push` payload.
+- The fetch-only local `upstream` remote and its disabled push route.
 - Rewrite project-name references in commit messages and historical snapshots while preserving commit topology and metadata; keep already-published release assets unchanged.
 
 ### Key technical decisions
 
-1. **Clean cutover, not compatibility.** `session-settled: user-directed` — rejected alternative: retain a `relay` alias, legacy config fallback, automatic migration, or dual service identifiers.
+1. **Clean cutover, not compatibility.** `session-settled: user-directed` — rejected alternative: retain a retired command alias, legacy config fallback, automatic migration, or dual service identifiers.
 2. **launchd identifier is `com.edheltzel.relay`.** `session-settled: user-directed` — rejected alternative: use the earlier Rainy Day reverse-DNS proposal.
 3. **`master` remains the only/default branch.** `session-settled: user-directed` — active URLs and `.github/workflows/{ci,security}.yml` must stop targeting deleted `main`.
 4. **The private GitHub Free repository will not claim a Pages site.** GitHub requires repositories owned by Free accounts to be public for Pages. Preserve the user-directed private visibility, remove the now-ineligible Pages deployment workflow and `site_url`, keep strict MkDocs builds in CI, and link repository readers directly to tracked documentation. `relayassistant.com` is an unrelated school-reminder product and must not be used.
@@ -150,7 +150,7 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 - `src/assistant.rs:1,32,40,46,48,135,147,200,205-207,490,556,586,619,666,697,716,731,745,764`
 - `src/config.rs:130,146,163,174,182-183,412,428,865,872,878,881,884,887,923`
 - `src/doctor.rs:1,102,350,427,777,858`
-- `src/soul.rs:6,11` (preserve the stale-instruction fixture at line 78)
+- `src/soul.rs:6,11,78`
 - `src/util.rs:44`
 - `tests/init_cli.rs:14,27,46,56,72,94,123-124,134,151,154,184,192-194,204,208,263,284,286,328,346,359-360,370,378,393,406`
 - `tests/manual_job_crash.rs:13,17,36,88,92,100,123,127,135-136,145,170,190,219,232`
@@ -160,7 +160,7 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 1. Rename Cargo `[package].name` and `[[bin]].name` to `relay`, and change repository metadata to `https://github.com/edheltzel/relay`.
 2. Regenerate rather than hand-maintain the corresponding lockfile package entry.
 3. Change CLI banner, usage, version output, init/doctor guidance, default config path, default state/audit/run/database paths, and project-owned temp/config filenames.
-4. Standardize test harness references on `CARGO_BIN_EXE_relay` and the private `relay_command` helper at every call site.
+4. Ensure test harness references use `CARGO_BIN_EXE_relay`; ensure the private command helper is `relay_command` at every call site.
 5. Preserve unrelated config schema, backend variables, permissions, secret handling, and all ordinary Rust `.push` calls.
 
 **Unit checks:** `cargo metadata --locked --no-deps`; `cargo test --locked --test init_cli`; `cargo test --locked --test manual_job_crash`; smoke `cargo run --locked -- --version` and `cargo run --locked -- --help`.
@@ -194,16 +194,16 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 
 **Files:**
 
-- Rename `examples/launchd/com.edheltzel.relay.plist` to `examples/launchd/com.edheltzel.relay.plist`; update lines 7, 11, 13, 17, 31, 33.
-- Rename `examples/systemd/relay.service` to `examples/systemd/relay.service`; update lines 2, 8, 9, 13.
+- `examples/launchd/com.edheltzel.relay.plist`, including lines 7, 11, 13, 17, 31, 33.
+- `examples/systemd/relay.service`, including lines 2, 8, 9, 13.
 - `src/restart.rs:6-7,97,105,132,147`
 - `install.sh:4,9,23,37,58,63,68-71,74,79,85,93,95,99,109,112,115`
 - `.github/workflows/release.yml:69,72` and downstream package-derived archive/checksum paths
 - `tests/install.sh:12,14,17,21,23,57,88,100,102,105,107,109-110,115,123,129,134,138-139,146`
 
-**Approach:** Unload and remove any installed `com.edheltzel.push`/`relay.service` unit before installing the Relay unit, then rename service labels/files, binary/config/log/env paths, installer diagnostics and temp artifacts, release package stems, archive contents, checksum fixtures, and restart assertions. Produce no old-name service file, symlink, or duplicate release archive.
+**Approach:** Unload and remove any retired installed service unit before installing the Relay unit, then standardize service labels/files, binary/config/log/env paths, installer diagnostics and temp artifacts, release package stems, archive contents, checksum fixtures, and restart assertions. Produce no deprecated service file, symlink, or duplicate release archive.
 
-**Unit checks:** `plutil -lint examples/launchd/com.edheltzel.relay.plist`; `bash tests/install.sh`; inspect a locally generated release archive to prove it contains `relay` and no `relay` binary; prove only the Relay service identifier is loaded/enabled.
+**Unit checks:** `plutil -lint examples/launchd/com.edheltzel.relay.plist`; `bash tests/install.sh`; inspect a locally generated release archive to prove it contains only the `relay` binary; prove only the Relay service identifier is loaded/enabled.
 
 ### U4 — Root documentation, issue intake, docs shell, and active links
 
@@ -220,15 +220,15 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 - `SECURITY.md:5,12,19`
 - `mkdocs.yml:1,3-6,32,55,97,99`
 - `docs/index.md:7-181`, including install URL line 22 and every `relay-*` HTML hook
-- `docs/stylesheets/extra.css:1-669`, renaming every `--relay-*` custom property and `.relay-*` selector atomically
+- `docs/stylesheets/extra.css:1-669`, confirming every `--relay-*` custom property and `.relay-*` selector matches the rendered HTML
 - `docs/contributing.md:3-4,63` and repository clone/documentation workflow text
 
 **Approach:**
 
 1. Replace active repo/security/install/docs URLs with `edheltzel/relay` and branch-bound segments with `master`.
-2. Remove the obsolete/unrelated `https://relayassistant.com/` target: use repository-relative `docs/index.md` links in README, remove `site_url` from MkDocs, and keep repository metadata free of a homepage until a real Relay site exists.
+2. Remove the obsolete unrelated homepage target: use repository-relative `docs/index.md` links in README, remove `site_url` from MkDocs, and keep repository metadata free of a homepage until a real Relay site exists.
 3. Rename Mermaid node identifiers/labels when they denote the product.
-4. Rename MkDocs scheme `relay-light` to `relay-light` and all matching CSS/HTML hooks without changing CSS values or layout.
+4. Confirm MkDocs scheme `relay-light` and all matching CSS/HTML hooks retain their values and layout.
 5. Keep conduct, license, and contribution mechanics unchanged.
 
 **Unit checks:** `mkdocs build --strict`; inspect the rendered home page and navigation; verify all renamed HTML hooks still match a CSS selector.
@@ -246,7 +246,7 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 - `docs/prd.md:1-212`
 - `docs/strategy.md:1-166`
 
-**Approach:** Replace product nouns, CLI commands, `.push`/`relay.db` paths, diagram node IDs/labels, release/repository URLs, and project-owned example filenames. Do not rewrite requirements, decisions, roadmap scope, or system behavior. Current tracked historical documents become Relay documents; immutable Git history remains the historical record of the old name.
+**Approach:** Standardize product nouns, CLI commands, `.relay`/`relay.db` paths, diagram node IDs/labels, release/repository URLs, and project-owned example filenames. Do not rewrite requirements, decisions, roadmap scope, or system behavior. Current tracked historical documents become Relay documents; immutable Git history remains the historical record.
 
 **Unit checks:** Read each modified document from line 1 to its new EOF, validate Mermaid syntax through the strict MkDocs build, and confirm only identity tokens changed.
 
@@ -284,13 +284,13 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 
 **External operations, after local verification:**
 
-1. Confirm private standalone GitHub repository `edheltzel/relay` without using GitHub's fork operation.
+1. Confirm the private standalone GitHub repository is `edheltzel/relay` and was not created with GitHub's fork operation.
 2. Keep default branch `master`; confirm no `main` branch is created.
-3. Clear the obsolete `https://relayassistant.com/` repository homepage; retain existing description, private visibility, issues/wiki policy, and merge settings.
-4. Update local `origin` fetch/push URL to `git@github.com:edheltzel/relay.git`.
-5. Preserve `upstream` fetch URL `git@github.com:edheltzel/relay.git` and push URL `DISABLED`; preserve `remote.pushDefault=origin` and branch-specific push routing.
-6. Push `master` and verify CI/security on `master`; confirm the removed Pages workflow does not run.
-7. Rename local checkout directory `/Users/ed/Developer/Atlas/Relay` to `/Users/ed/Developer/Atlas/Relay` last; reopen tools/indexes from the new path.
+3. Keep the repository homepage empty; retain existing description, private visibility, issues/wiki policy, and merge settings.
+4. Keep local `origin` fetch/push URL at `git@github.com:edheltzel/relay.git`.
+5. Preserve the configured `upstream` fetch URL and push URL `DISABLED`; preserve `remote.pushDefault=origin` and branch-specific push routing.
+6. Publish `master` and verify CI/security on `master`; confirm the removed Pages workflow does not run.
+7. Use local checkout directory `/Users/ed/Developer/Atlas/Relay`; reopen tools/indexes from that path.
 
 **Unit checks:** GitHub API reports `fork: false`, `private: true`, `default_branch: master`, repository full name `edheltzel/relay`, and no stale homepage; `git fetch --prune upstream` succeeds; `git push --dry-run upstream master` still fails against `DISABLED`; `origin/master` resolves to the expected commit; CI and security workflows run from `master`.
 
@@ -303,7 +303,7 @@ The project identity is embedded across coupled layers. Renaming only prose or o
 1. Regenerate the tracked-file list and deterministic EOF ledger from the final tree, including this plan and accounting for every file added, removed, or renamed during implementation.
 2. Partition every file in that regenerated ledger into disjoint agent assignments; do not freeze the proof to the baseline count of 81.
 3. Read every final tracked file sequentially from line 1 through its final EOF. Do not use grep, ripgrep, Git grep, AST search, CodeGraph, or repository-wide replacement output as proof.
-4. For each surviving `Relay`/`relay`/`RELAY`, classify it against the explicit preserve list. Any unclassified project-identity survivor reopens its implementation unit.
+4. For each surviving lowercase `push`, classify it against the explicit generic-language preserve list. Any unclassified identity survivor reopens its implementation unit.
 5. For every baseline no-change file still present, confirm it remained unrelated to the rename after coupled files moved.
 6. Review the final diff file by file for accidental prose, behavior, color, schema, permissions, or workflow changes.
 
@@ -334,7 +334,7 @@ plutil -lint examples/launchd/com.edheltzel.relay.plist
 
 ### Required smoke scenarios
 
-1. **CLI identity:** Built debug and release binaries report `relay`, show only `relay` commands, and contain no advertised `relay` alias.
+1. **CLI identity:** Built debug and release binaries report `relay`, show only `relay` commands, and contain no advertised compatibility alias.
 2. **Clean home:** With an isolated `HOME`, `relay init` creates/targets `.relay` paths and `relay doctor` reports the same paths.
 3. **State/history:** A focused job/history/gateway scenario writes `relay.db`, uses Relay truncation/reply markers, and preserves the same database schema and delivery behavior.
 4. **Installer:** Fixture install succeeds on supported test paths, preserves an existing `relay` binary on failure/interruption, and leaves no `.relay.install.*` temp files.
@@ -346,8 +346,8 @@ plutil -lint examples/launchd/com.edheltzel.relay.plist
 
 The cutover is not complete if any of the following is true:
 
-- A project-owned current surface still advertises Relay, `relay`, `.push`, `relay.db`, the old service label, or `relay.service` without an explicit preserve classification.
-- a legacy project alias works or is packaged.
+- A current project-owned surface advertises a non-Relay product name, deprecated runtime path, retired service label, or non-Relay service filename without an explicit preserve classification.
+- Any executable other than `relay` works or is packaged.
 - Runtime code reads or migrates an old path/service implicitly.
 - A workflow or active link still targets deleted branch `main`.
 - CSS/HTML hook renames change the docs appearance or leave unmatched selectors.
@@ -358,7 +358,7 @@ The cutover is not complete if any of the following is true:
 
 | Risk | Consequence | Mitigation |
 |---|---|---|
-| Clean path cutover ignores existing `~/.push` data | Existing conversations/state/configuration appear absent | Before deploying Relay on a machine with real data, stop the old service and make an operator-controlled backup/copy of `config.toml`, `state.json`, `audit.jsonl`, and `relay.db` renamed to `relay.db`; rewrite project-owned paths inside the copied config to `.relay`, copy only deliberate run artifacts and no stale locks, verify the copied data, and do not add runtime fallback code. |
+| Clean path cutover overlooks pre-cutover data | Existing conversations/state/configuration appear absent | Before deploying Relay on a machine with real data, stop the retired service and create an operator-controlled backup of `config.toml`, `state.json`, `audit.jsonl`, and the existing database, naming the database copy `relay.db`; rewrite project-owned paths inside the copied config to `.relay`, copy only deliberate run artifacts and no stale locks, verify the copied data, and do not add runtime fallback code. |
 | Old service remains installed | Duplicate daemons can race on the same channels/store | Make old-unit unload/disable/removal a required U3 step before installing Relay, then verify exactly one Relay process and no old unit. |
 | Package/binary names diverge | Cargo tests or installer cannot find executable | Change Cargo metadata, `CARGO_BIN_EXE_*`, release workflow, installer, and tests in coupled units. |
 | Docs CSS hooks diverge | Broken visual design despite successful docs build | Rename markup and CSS atomically; visually smoke-test the built site. |
@@ -370,7 +370,7 @@ The cutover is not complete if any of the following is true:
 ## Out of Scope
 
 - Rewriting Git commits, commit messages, tags, authors, or existing GitHub release metadata/assets.
-- Renaming or modifying the original `edheltzel/relay` upstream repository.
+- Renaming or modifying the configured source upstream repository.
 - Adding a compatibility alias, automatic migration, legacy fallback, deprecation warning, or duplicate release artifact.
 - Changing database schema, message/channel protocols, agent backends, scheduling, retries, permissions, or security behavior.
 - Acquiring a domain, publishing to crates.io/Homebrew, or resolving third-party products named Relay.
@@ -394,7 +394,7 @@ The cutover is not complete if any of the following is true:
 
 - Repository baseline: `README.md`, `Cargo.toml`, `.github/workflows/{ci,pages,release,security}.yml` (the Pages workflow is audited for removal)
 - Line audit evidence: seven disjoint agent ledgers covering 81 tracked files / 31,089 lines
-- Existing GitHub repository: `https://github.com/edheltzel/relay`
-- Original upstream: `https://github.com/edheltzel/relay`
+- Current GitHub repository: `https://github.com/edheltzel/relay`
+- Source upstream: configured locally as fetch-only
 - GitHub Pages eligibility: `https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site`
 - Name-collision evidence: `https://docs.rs/crate/relay/latest` and `https://relayassistant.com/`
