@@ -132,7 +132,7 @@ Open `~/.relay/config.toml` and set the agent, bot token, and numeric user ID:
 
 ```toml
 channel = "telegram"
-agent = "codex"
+agent = "pi"
 assistant_root = "~/Code/assistant"
 
 [telegram]
@@ -140,7 +140,7 @@ bot_token = "token-from-BotFather"
 allow_user_ids = [123456789]
 ```
 
-Use `agent = "claude"` for Claude Code or `agent = "pi"` for Pi. Save the file.
+Use `agent = "claude"` for Claude Code or `agent = "codex"` for Codex. Save the file.
 `relay init` creates it with owner-only permissions.
 
 For token storage, allowlisting, and routing options, read the
@@ -193,14 +193,101 @@ close the terminal, follow [How to run Relay as a service](docs/services.md).
 
 ### `relay` is not found
 
-Relay installs to `~/.local/bin`. Run:
+Relay installs to `~/.local/bin`. Use the command for your shell, then confirm
+that `relay --version` works.
 
-```sh
-export PATH="$HOME/.local/bin:$PATH"
+#### Fish
+
+[`fish_add_path`](https://fishshell.com/docs/current/cmds/fish_add_path.html)
+persists the directory as a universal variable:
+
+```fish
+fish_add_path $HOME/.local/bin
 relay --version
 ```
 
-Then add the export line to `~/.zshrc`, `~/.bashrc`, or your shell's equivalent.
+#### Zsh
+
+```zsh
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
+source "$HOME/.zshrc"
+relay --version
+```
+
+#### Bash
+
+```bash
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.bashrc"
+source "$HOME/.bashrc"
+relay --version
+```
+
+If you use Bash as a login shell on macOS, use `~/.bash_profile` instead of
+`~/.bashrc`.
+
+#### NixOS
+
+Add the official
+[`environment.localBinInPath`](https://nixos.org/manual/nixos/stable/options#opt-environment.localBinInPath)
+option to `/etc/nixos/configuration.nix`:
+
+```nix
+{
+  environment.localBinInPath = true;
+  programs.nix-ld.enable = true;
+}
+```
+
+Apply the configuration and verify Relay:
+
+```bash
+sudo nixos-rebuild switch
+relay --version
+```
+
+[`programs.nix-ld`](https://search.nixos.org/options?show=programs.nix-ld.enable&query=programs.nix-ld.enable)
+lets NixOS run the dynamically linked Linux release binary.
+If you do not want to enable it, [build Relay from source](#build-from-source)
+inside your Nix environment.
+
+#### Nushell
+
+Open the Nushell config with `config nu`, then add the current standard-library
+PATH helper:
+
+```nu
+use std/util "path add"
+path add "~/.local/bin"
+```
+
+Start a new Nushell session, then run:
+
+```nu
+relay --version
+```
+
+See the official
+[Nushell configuration guide](https://www.nushell.sh/book/configuration.html)
+for more PATH options.
+
+#### WSL on Windows with PowerShell — untested
+
+Relay has not been tested on Windows Subsystem for Linux (WSL). Install and run
+the Linux binary inside your WSL distribution; adding it to Windows
+`$env:Path` will not make the Linux executable run natively on Windows.
+
+This PowerShell example assumes your WSL distribution has Bash. It adds Relay
+to the WSL user's Bash path without duplicating the line:
+
+```powershell
+wsl.exe bash -lc 'grep -qxF ''export PATH="$HOME/.local/bin:$PATH"'' "$HOME/.bashrc" || printf ''\nexport PATH="$HOME/.local/bin:$PATH"\n'' >> "$HOME/.bashrc"'
+wsl.exe bash -ic 'relay --version'
+```
+
+For Fish, Zsh, or Nushell inside WSL, open that shell in WSL and use its
+shell-specific instructions above. See Microsoft's
+[WSL command reference](https://learn.microsoft.com/windows/wsl/basic-commands)
+for distribution and user-selection options.
 
 ### The installer cannot access the release
 
