@@ -141,7 +141,7 @@ impl OpenAiVoice {
         Self {
             api_key,
             voice_name,
-            client: reqwest::Client::new(),
+            client: crate::util::reqwest_client(),
             base_url: "https://api.openai.com/v1".to_string(),
         }
     }
@@ -151,7 +151,7 @@ impl OpenAiVoice {
         Self {
             api_key,
             voice_name,
-            client: reqwest::Client::new(),
+            client: crate::util::reqwest_client(),
             base_url,
         }
     }

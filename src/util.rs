@@ -1,6 +1,8 @@
 //! Small helpers shared across modules.
 
+use reqwest::{Certificate, Client, ClientBuilder};
 use std::path::Path;
+use webpki_root_certs::TLS_SERVER_ROOT_CERTS;
 
 /// Expands a leading `~` or `~/` to `$HOME`. Other paths pass through.
 pub(crate) fn expand_home(path: &str) -> String {
@@ -53,4 +55,19 @@ pub(crate) fn restrict_permissions(path: &Path, directory: bool) -> std::io::Res
 #[cfg(not(unix))]
 pub(crate) fn restrict_permissions(_path: &Path, _directory: bool) -> std::io::Result<()> {
     Ok(())
+}
+
+/// Builds an HTTP client with Relay's fixed Mozilla root set.
+pub(crate) fn reqwest_client_builder() -> ClientBuilder {
+    let roots = TLS_SERVER_ROOT_CERTS.iter().map(|cert| {
+        Certificate::from_der(cert.as_ref()).expect("compiled WebPKI root certificate is valid")
+    });
+    Client::builder().tls_certs_only(roots)
+}
+
+/// Builds an HTTP client with Relay's fixed Mozilla root set.
+pub(crate) fn reqwest_client() -> Client {
+    reqwest_client_builder()
+        .build()
+        .expect("build Relay HTTP client")
 }
