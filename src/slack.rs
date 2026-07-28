@@ -130,7 +130,7 @@ impl Slack {
                     .map(|value| value.trim().to_string())
                     .collect(),
                 inbox: Mutex::new(Inbox::open(inbox_path)?),
-                client: Client::builder()
+                client: crate::util::reqwest_client_builder()
                     .timeout(Duration::from_secs(25))
                     .build()
                     .context("build Slack HTTP client")?,

@@ -168,7 +168,7 @@ impl Telegram {
             allow_user_ids: Arc::new(allow_user_ids.into_iter().collect()),
             allow_chat_ids: Arc::new(allow_chat_ids.into_iter().collect()),
             transport: Arc::new(ReqwestTransport {
-                client: reqwest::Client::new(),
+                client: crate::util::reqwest_client(),
             }),
         }
     }
