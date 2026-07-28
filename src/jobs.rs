@@ -1,6 +1,7 @@
 //! Validated Markdown runbooks and the durable manual-run runtime.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Write as _;
 use std::fs::{File, OpenOptions, TryLockError};
 use std::future::Future;
 use std::io::Read;
@@ -231,7 +232,11 @@ pub(crate) fn validate_contents(
         snapshot.update(b"\0");
         snapshot.update(eval.body.as_bytes());
     }
-    let snapshot_hash = format!("{:x}", snapshot.finalize());
+    let digest = snapshot.finalize();
+    let mut snapshot_hash = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut snapshot_hash, "{byte:02x}").expect("writing to a String cannot fail");
+    }
     Ok(Job {
         name: name.to_string(),
         path: path.to_path_buf(),
@@ -2254,6 +2259,10 @@ mod tests {
         assert!(catalog.errors[0].message.contains("is not installed"));
 
         let original_snapshot = catalog.jobs["evaluated"].snapshot_hash.clone();
+        assert_eq!(original_snapshot.len(), 64);
+        assert!(original_snapshot
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
         write_eval(&cfg, "writing-style", "Reject em dashes and clichés.");
         let changed = Catalog::load_named(&cfg, "evaluated").unwrap();
         assert_ne!(changed.snapshot_hash, original_snapshot);
