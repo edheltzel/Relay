@@ -2,6 +2,7 @@
 name = "relay"
 version = "0.9.0"
 edition = "2021"
+rust-version = "1.95"
 license = "MIT"
 description = "A tiny messaging gateway that turns coding agents into a personal assistant you text."
 repository = "https://github.com/edheltzel/relay"
@@ -15,11 +16,11 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "ti
 tokio-tungstenite = { version = "0.27", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3", features = ["sink"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
-toml_edit = "0.23"
+toml_edit = "0.25"
 uuid = { version = "1", features = ["v4"] }
 anyhow = "1"
 humantime = "2"
