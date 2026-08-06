@@ -9,8 +9,6 @@
   <key>ProgramArguments</key>
   <array>
     <string>/Users/YOU/.local/bin/relay</string>
-    <string>--config</string>
-    <string>/Users/YOU/.relay/config.toml</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -18,6 +16,8 @@
 
   <key>EnvironmentVariables</key>
   <dict>
+    <key>RELAY_HOME</key>
+    <string>/Users/YOU/.relay</string>
     <key>PATH</key>
     <string>/Users/YOU/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>

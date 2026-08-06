@@ -910,7 +910,7 @@ mod tests {
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
         let skill_path = target.join("skills/relay/SKILL.md");
         let manifest_path = target.join("skills/relay/.relay-managed.json");
-        let old_skill = b"---\nname: push\ndescription: Old managed Relay skill.\n---\n";
+        let old_skill = b"---\nname: relay\ndescription: Old managed Relay skill.\n---\n";
         fs::write(&skill_path, old_skill).unwrap();
         fs::write(
             &manifest_path,
@@ -1015,14 +1015,14 @@ mod tests {
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
         let link = target.join(".claude/skills/relay");
         fs::remove_file(&link).unwrap();
-        symlink("../../skills/user-push", &link).unwrap();
+        symlink("../../skills/user-skill", &link).unwrap();
 
         let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
 
         assert!(error.to_string().contains("conflicting provider skill"));
         assert_eq!(
             fs::read_link(&link).unwrap(),
-            Path::new("../../skills/user-push")
+            Path::new("../../skills/user-skill")
         );
         let _ = fs::remove_dir_all(parent);
     }
