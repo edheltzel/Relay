@@ -90,6 +90,28 @@ fn init_without_path_creates_assistant_in_current_directory() {
     assert!(assistant.join("context/README.md").is_file());
     assert!(assistant.join("evals").is_dir());
     assert!(assistant.join("jobs").is_dir());
+    let canonical_skill = assistant.join("skills/relay/SKILL.md");
+    let skill = std::fs::read_to_string(&canonical_skill).unwrap();
+    assert!(skill.contains("name: relay"));
+    assert!(skill.contains("relay-managed-version: \"3\""));
+    assert!(skill.contains("- `relay status`"));
+    assert!(skill.contains("- `relay paths`"));
+    assert!(skill.contains("Inspection commands support `--json`"));
+    assert!(skill.contains("records the one-time"));
+    assert!(skill.contains("relay job reviews [<name>]"));
+    assert!(skill.contains("separate owner review"));
+    assert!(!skill.contains(&root.to_string_lossy().to_string()));
+    for provider in [".agents", ".claude"] {
+        let exposure = assistant.join(provider).join("skills/relay");
+        assert!(std::fs::symlink_metadata(&exposure)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            std::fs::canonicalize(exposure).unwrap(),
+            std::fs::canonicalize(assistant.join("skills/relay")).unwrap()
+        );
+    }
     assert!(assistant.join(".git").exists());
     let config_path = home.join(".relay/config.toml");
     let config = std::fs::read_to_string(&config_path).unwrap();
@@ -189,7 +211,10 @@ fn run_without_default_config_reports_first_run_guidance() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("configuration not found at ~/.relay/config.toml"));
+    assert!(stderr.contains(&format!(
+        "configuration not found at {}",
+        home.join(".relay/config.toml").display()
+    )));
     assert!(stderr.contains("Create it with:\n  relay init"));
     assert!(!stderr.contains("relay init --config"));
     assert!(stderr.contains("Then configure a channel"));
@@ -356,7 +381,10 @@ fn assert_missing_default_config_guidance(args: &[&str]) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(combined.contains("configuration not found at ~/.relay/config.toml"));
+    assert!(combined.contains(&format!(
+        "configuration not found at {}",
+        home.join(".relay/config.toml").display()
+    )));
     assert!(combined.contains("Create it with:\n  relay init"));
     assert!(!combined.contains("config.toml.example"));
     let _ = std::fs::remove_dir_all(root);
@@ -378,6 +406,68 @@ fn run_with_missing_custom_config_reports_selected_path() {
     let expected = format!("relay init --config {quoted_path}");
     assert!(stderr.contains(&expected));
     assert!(!stderr.contains("read config"));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn relay_home_controls_the_default_config_location() {
+    let root = temp_dir("relay-home");
+    let home = root.join("home");
+    let relay_home = root.join("instances/primary");
+    let workdir = root.join("workdir");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&workdir).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
+        .arg("init")
+        .current_dir(&workdir)
+        .env("HOME", &home)
+        .env("RELAY_HOME", &relay_home)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(relay_home.join("config.toml").is_file());
+    assert!(!home.join(".relay/config.toml").exists());
+    assert!(String::from_utf8_lossy(&output.stdout).contains(&format!(
+        "$EDITOR {}",
+        relay_home.join("config.toml").display()
+    )));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn explicit_config_path_takes_precedence_over_relay_home() {
+    let root = temp_dir("relay-home-explicit-config");
+    let home = root.join("home");
+    let relay_home = root.join("instances/primary");
+    let workdir = root.join("workdir");
+    let config = root.join("selected/config.toml");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&workdir).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_relay"))
+        .args(["init", "--config"])
+        .arg(&config)
+        .current_dir(&workdir)
+        .env("HOME", &home)
+        .env("RELAY_HOME", &relay_home)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(config.is_file());
+    assert!(!relay_home.join("config.toml").exists());
+    assert!(String::from_utf8_lossy(&output.stdout)
+        .contains(&format!("relay doctor --config {}", config.display())));
     let _ = std::fs::remove_dir_all(root);
 }
 

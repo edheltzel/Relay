@@ -6,7 +6,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 #[test]
 fn local_documentation_links_resolve() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut markdown = vec![root.join("README.md")];
+    let mut markdown = vec![root.join("README.md"), root.join("ARCHITECTURE.md")];
     collect_markdown(&root.join("docs"), &mut markdown);
 
     let mut broken = Vec::new();
@@ -62,6 +62,31 @@ fn local_documentation_links_resolve() {
         "broken local documentation links:\n{}",
         broken.join("\n")
     );
+}
+
+#[test]
+fn service_examples_select_one_relay_home() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let launchd =
+        std::fs::read_to_string(root.join("examples/launchd/com.edheltzel.relay.plist")).unwrap();
+    let systemd = std::fs::read_to_string(root.join("examples/systemd/relay.service")).unwrap();
+
+    assert!(launchd.contains("<key>RELAY_HOME</key>"));
+    assert!(launchd.contains("<string>/Users/YOU/.relay</string>"));
+    assert!(!launchd.contains("<string>--config</string>"));
+    assert!(systemd.contains("Environment=RELAY_HOME=%h/.relay"));
+    assert_eq!(
+        systemd.lines().find(|line| line.starts_with("ExecStart=")),
+        Some("ExecStart=%h/.local/bin/relay")
+    );
+}
+
+#[test]
+fn service_guide_protects_launchd_logs() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let services = fs::read_to_string(root.join("docs/services.md")).unwrap();
+
+    assert!(services.contains("chmod 600 ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log"));
 }
 
 fn heading_anchors(markdown: &str) -> Vec<String> {

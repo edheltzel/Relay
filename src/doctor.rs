@@ -4,8 +4,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
+use serde::Serialize;
 
-use crate::{channel::Channel, config, history, jobs};
+use crate::{channel::Channel, config, jobs};
 use config::{SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV, TELEGRAM_BOT_TOKEN_ENV};
 
 /// Fails fast with actionable messages when the environment is not ready.
@@ -40,6 +41,7 @@ pub fn doctor(config_path: &str) -> Result<()> {
             bail!("doctor found 1 failed check");
         }
     };
+    jobs::Ledger::capture_legacy_schedule_baseline(&cfg)?;
     let report = run_checks(&cfg);
     print!("{report}");
     if report.is_ok() {
@@ -49,6 +51,10 @@ pub fn doctor(config_path: &str) -> Result<()> {
     }
 }
 
+pub(crate) fn report(cfg: &config::Config) -> CheckReport {
+    run_checks(cfg)
+}
+
 fn run_checks(cfg: &config::Config) -> CheckReport {
     let mut checks = Vec::new();
     check_config(cfg, &mut checks);
@@ -56,13 +62,13 @@ fn run_checks(cfg: &config::Config) -> CheckReport {
     check_parent_dir(
         "state directory",
         "state_path",
-        &cfg.state_path,
+        &cfg.paths.state,
         &mut checks,
     );
     check_parent_dir(
         "audit log directory",
         "audit_log_path",
-        &cfg.audit_log_path,
+        &cfg.paths.audit,
         &mut checks,
     );
     check_history_database(cfg, &mut checks);
@@ -228,8 +234,8 @@ fn check_config(cfg: &config::Config, checks: &mut Vec<Check>) {
 }
 
 /// Checks that the parent directory of a configured file path is writable.
-fn check_parent_dir(name: &str, field: &str, path: &str, checks: &mut Vec<Check>) {
-    if let Some(parent) = Path::new(path).parent() {
+fn check_parent_dir(name: &str, field: &str, path: &Path, checks: &mut Vec<Check>) {
+    if let Some(parent) = path.parent() {
         check_writable_dir(name, field, parent, checks);
     } else {
         checks.push(Check::pass(
@@ -256,16 +262,20 @@ fn check_writable_dir(name: &str, field: &str, dir: &Path, checks: &mut Vec<Chec
 }
 
 fn check_history_database(cfg: &config::Config, checks: &mut Vec<Check>) {
-    match history::History::open(&cfg.database_path) {
+    match crate::store::Store::open(&cfg.paths) {
         Ok(_) => checks.push(Check::pass(
             "conversation database",
-            format!("{} is ready", cfg.database_path),
+            format!(
+                "{} is ready for history and runtime state",
+                cfg.paths.database.display()
+            ),
         )),
         Err(error) => checks.push(Check::fail(
             "conversation database",
             format!(
-                "cannot open {}: {error}. Choose a writable database_path and repair or remove an invalid database.",
-                cfg.database_path
+                "cannot prepare {} or migrate legacy state from {}: {error:#}. Repair the database or legacy JSON before starting Relay.",
+                cfg.paths.database.display(),
+                cfg.paths.state.display()
             ),
         )),
     }
@@ -396,19 +406,19 @@ fn check_bins_with(
     }
 }
 
-#[derive(Debug)]
-struct CheckReport {
-    checks: Vec<Check>,
+#[derive(Debug, Serialize)]
+pub(crate) struct CheckReport {
+    pub(crate) checks: Vec<Check>,
 }
 
 impl CheckReport {
-    fn is_ok(&self) -> bool {
+    pub(crate) fn is_ok(&self) -> bool {
         self.checks
             .iter()
             .all(|check| matches!(check.status, CheckStatus::Pass))
     }
 
-    fn failed_count(&self) -> usize {
+    pub(crate) fn failed_count(&self) -> usize {
         self.checks
             .iter()
             .filter(|check| matches!(check.status, CheckStatus::Fail))
@@ -418,6 +428,13 @@ impl CheckReport {
     fn preflight_is_ok(&self) -> bool {
         self.checks.iter().all(|check| {
             !matches!(check.status, CheckStatus::Fail) || check.name == "scheduled delivery"
+        })
+    }
+
+    pub(crate) fn has_unavailable_dependency(&self) -> bool {
+        self.checks.iter().any(|check| {
+            matches!(check.status, CheckStatus::Fail)
+                && (check.name == "agent binaries" || check.name.starts_with("binary "))
         })
     }
 }
@@ -440,8 +457,8 @@ impl fmt::Display for CheckReport {
     }
 }
 
-#[derive(Debug)]
-struct Check {
+#[derive(Debug, Serialize)]
+pub(crate) struct Check {
     name: String,
     status: CheckStatus,
     message: String,
@@ -465,7 +482,8 @@ impl Check {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum CheckStatus {
     Pass,
     Fail,
@@ -768,15 +786,9 @@ claude_tools = []
         let state_path = temp_path("state-dir").join("state.json");
         let mut cfg = test_config();
         cfg.db_path = db_path.to_string_lossy().to_string();
-        cfg.state_path = state_path.to_string_lossy().to_string();
-        cfg.audit_log_path = state_path
-            .with_extension("audit.jsonl")
-            .to_string_lossy()
-            .to_string();
-        cfg.database_path = state_path
-            .with_extension("relay.db")
-            .to_string_lossy()
-            .to_string();
+        cfg.paths.state = state_path.clone();
+        cfg.paths.audit = state_path.with_extension("audit.jsonl");
+        cfg.paths.database = state_path.with_extension("relay.db");
         let report = run_checks(&cfg);
 
         assert!(report
@@ -798,8 +810,8 @@ claude_tools = []
 
         let _ = std::fs::remove_file(db_path);
         let _ = std::fs::remove_file(state_path);
-        let _ = std::fs::remove_file(cfg.audit_log_path);
-        let _ = std::fs::remove_file(cfg.database_path);
+        let _ = std::fs::remove_file(cfg.paths.audit);
+        let _ = std::fs::remove_file(cfg.paths.database);
     }
 
     #[test]

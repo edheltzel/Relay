@@ -11,11 +11,10 @@ use tracing::{error, info, warn};
 
 use crate::agent::{Request, RunError};
 use crate::history::{DeliveryStatus, OutboundMessage, OutboundOrigin};
-use crate::rehydration::{self, RehydrationPrompt};
-use crate::soul;
+use crate::prompt::{ComposedPrompt, Composer};
 use crate::voice::MAX_AUDIO_BYTES;
 
-use super::{audit, complete_row, Ctx, Job, WorkerState};
+use super::{audit, audit_schedule_events, complete_row, Ctx, Job, WorkerState};
 
 pub(super) const SESSION_SETUP_FAILURE: &str =
     "Relay could not prepare this conversation. Check the local logs, then resend.";
@@ -72,6 +71,7 @@ where
             "recovered_outbound",
             "recover outbound",
         );
+        review_changed_schedules(ctx, &job).await;
         return;
     }
 
@@ -186,24 +186,6 @@ where
         }
     };
 
-    let instructions = match soul::load(&work_dir) {
-        Ok(instructions) => instructions,
-        Err(error) => {
-            error!("[{}] assistant identity error: {error}", job.thread);
-            audit(
-                ctx,
-                ctx.audit.failed(
-                    "backend_setup_failed",
-                    job.row_id,
-                    &job.thread,
-                    Some(job.backend),
-                    error.to_string(),
-                ),
-            );
-            complete_setup_failure(ctx, &job, SESSION_SETUP_FAILURE).await;
-            return;
-        }
-    };
     if let Err(error) = ctx.cfg.backend_context_dir() {
         error!("[{}] assistant context error: {error:#}", job.thread);
         audit(
@@ -219,20 +201,34 @@ where
         complete_setup_failure(ctx, &job, SESSION_SETUP_FAILURE).await;
         return;
     }
+    let composer = match Composer::load(&work_dir, &work_dir) {
+        Ok(composer) => composer,
+        Err(error) => {
+            error!("[{}] prompt composition error: {error}", job.thread);
+            audit(
+                ctx,
+                ctx.audit.failed(
+                    "backend_setup_failed",
+                    job.row_id,
+                    &job.thread,
+                    Some(job.backend),
+                    error.to_string(),
+                ),
+            );
+            complete_setup_failure(ctx, &job, SESSION_SETUP_FAILURE).await;
+            return;
+        }
+    };
 
     let run = async {
         let mut session_id = session_id;
-        let mut rehydration = if is_new {
-            match rehydration_prompt(ctx, &job) {
-                Ok(prompt) => Some(prompt),
-                Err(error) => {
-                    return Err(RunError::Failed(format!(
-                        "load canonical history for rehydration: {error}"
-                    )));
-                }
+        let mut prompt = match conversation_prompt(ctx, &job, &composer, is_new) {
+            Ok(prompt) => prompt,
+            Err(error) => {
+                return Err(RunError::Failed(format!(
+                    "load canonical history for prompt: {error}"
+                )));
             }
-        } else {
-            None
         };
 
         // Some backends let Relay choose the session id. Mark those before the
@@ -240,10 +236,6 @@ where
         if is_new && runner.mark_started_before_run() {
             let _ = ctx.store.lock().unwrap().mark_started(&job.thread, None);
         }
-        let prompt = rehydration
-            .as_ref()
-            .filter(|prompt| prompt.message_count > 0)
-            .map_or(job.text.as_str(), |prompt| prompt.text.as_str());
         audit(
             ctx,
             ctx.audit.backend_started(
@@ -251,22 +243,18 @@ where
                 &job.thread,
                 job.backend,
                 is_new,
-                rehydration
-                    .as_ref()
-                    .map_or(0, |prompt| prompt.message_count),
+                prompt.rehydrated_messages,
             ),
         );
         info!(
             "[{}] sending message to {} (new_session={is_new}, rehydrated_messages={})",
             job.thread,
             runner.label(),
-            rehydration
-                .as_ref()
-                .map_or(0, |prompt| prompt.message_count)
+            prompt.rehydrated_messages
         );
         let mut result = runner
             .run(
-                backend_request(&session_id, is_new, &work_dir, &instructions, prompt),
+                backend_request(&session_id, is_new, &work_dir, &prompt),
                 ctx.run_timeout,
             )
             .await;
@@ -276,15 +264,12 @@ where
             if let Err(RunError::Failed(msg)) = &result {
                 if msg.to_lowercase().contains("already in use") {
                     warn!("[{}] session id already existed, resuming", job.thread);
+                    prompt = conversation_prompt(ctx, &job, &composer, false).map_err(|error| {
+                        RunError::Failed(format!("compose resumed prompt: {error}"))
+                    })?;
                     result = runner
                         .run(
-                            backend_request(
-                                &session_id,
-                                false,
-                                &work_dir,
-                                &instructions,
-                                &job.text,
-                            ),
+                            backend_request(&session_id, false, &work_dir, &prompt),
                             ctx.run_timeout,
                         )
                         .await;
@@ -315,32 +300,30 @@ where
                     "rotate missing backend session: {error}"
                 )));
             }
-            rehydration = match rehydration_prompt(ctx, &job) {
-                Ok(prompt) => Some(prompt),
+            prompt = match conversation_prompt(ctx, &job, &composer, true) {
+                Ok(prompt) => prompt,
                 Err(error) => {
                     return Err(RunError::Failed(format!(
-                        "load canonical history for rehydration: {error}"
+                        "load canonical history for prompt: {error}"
                     )));
                 }
             };
             if runner.mark_started_before_run() {
                 let _ = ctx.store.lock().unwrap().mark_started(&job.thread, None);
             }
-            let count = rehydration
-                .as_ref()
-                .map_or(0, |prompt| prompt.message_count);
             audit(
                 ctx,
-                ctx.audit
-                    .backend_started(job.row_id, &job.thread, job.backend, true, count),
+                ctx.audit.backend_started(
+                    job.row_id,
+                    &job.thread,
+                    job.backend,
+                    true,
+                    prompt.rehydrated_messages,
+                ),
             );
-            let prompt = rehydration
-                .as_ref()
-                .filter(|prompt| prompt.message_count > 0)
-                .map_or(job.text.as_str(), |prompt| prompt.text.as_str());
             result = runner
                 .run(
-                    backend_request(&session_id, true, &work_dir, &instructions, prompt),
+                    backend_request(&session_id, true, &work_dir, &prompt),
                     ctx.run_timeout,
                 )
                 .await;
@@ -505,6 +488,71 @@ where
                 },
             )
             .await;
+        }
+    }
+    review_changed_schedules(ctx, &job).await;
+}
+
+async fn review_changed_schedules(ctx: &Ctx, job: &Job) {
+    let Some(destination) = &ctx.schedule_destination else {
+        return;
+    };
+    let result = (|| {
+        let catalog = crate::jobs::Catalog::load(&ctx.cfg)?;
+        let mut ledger = crate::jobs::Ledger::open(&ctx.cfg.paths.database)?;
+        let (_, events) = ledger.reconcile_schedule_reviews(
+            &catalog,
+            &destination.channel,
+            &destination.target,
+            crate::util::now_ms(),
+        )?;
+        let questions = ledger.schedule_review_questions(
+            &job.approval_origin,
+            &job.target,
+            crate::util::now_ms(),
+        )?;
+        Ok::<_, anyhow::Error>((ledger, events, questions))
+    })();
+    let (mut ledger, _events, questions) = match result {
+        Ok(result) => result,
+        Err(error) => {
+            error!(
+                "[{}] reconcile schedule activation reviews: {error:#}",
+                job.thread
+            );
+            audit(
+                ctx,
+                ctx.audit.failed(
+                    "schedule_review_failed",
+                    job.row_id,
+                    &job.thread,
+                    None,
+                    error.to_string(),
+                ),
+            );
+            return;
+        }
+    };
+    audit_schedule_events(ctx, &mut ledger);
+    for question in questions {
+        let delivered =
+            super::reply_to(ctx, &question.target, &question.render_correlated_text()).await;
+        if let Err(error) = ledger.mark_schedule_question_delivery(
+            &question.id,
+            if delivered {
+                crate::approval::DeliveryStatus::Delivered
+            } else {
+                crate::approval::DeliveryStatus::Failed
+            },
+            crate::util::now_ms(),
+        ) {
+            error!(
+                "[{}] persist schedule review delivery: {error:#}",
+                job.thread
+            );
+        }
+        if !delivered {
+            warn!("[{}] schedule review delivery failed", job.thread);
         }
     }
 }
@@ -921,28 +969,46 @@ fn short(msg: &str) -> String {
     }
 }
 
-fn rehydration_prompt(ctx: &Ctx, job: &Job) -> Result<RehydrationPrompt> {
-    let messages = ctx.history.lock().unwrap().recent_messages_before(
+fn conversation_prompt(
+    ctx: &Ctx,
+    job: &Job,
+    composer: &Composer,
+    include_history: bool,
+) -> Result<ComposedPrompt> {
+    let messages = if include_history {
+        ctx.history.lock().unwrap().recent_messages_before(
+            ctx.channel.id(),
+            &job.thread,
+            job.inbound_id,
+            crate::prompt::MAX_HISTORY_MESSAGES,
+        )?
+    } else {
+        Vec::new()
+    };
+    Ok(composer.conversation(
         ctx.channel.id(),
         &job.thread,
-        job.inbound_id,
-        rehydration::MAX_HISTORY_MESSAGES,
-    )?;
-    Ok(rehydration::compose(&messages, &job.text))
+        if job.reply_with_voice {
+            "voice"
+        } else {
+            "text"
+        },
+        &messages,
+        &job.text,
+    ))
 }
 
 fn backend_request<'a>(
     session_id: &'a str,
     is_new: bool,
     work_dir: &'a str,
-    instructions: &'a str,
-    prompt: &'a str,
+    prompt: &'a ComposedPrompt,
 ) -> Request<'a> {
     Request {
         session_id,
         is_new,
         work_dir,
-        instructions,
-        prompt,
+        instructions: &prompt.instructions,
+        prompt: &prompt.content,
     }
 }

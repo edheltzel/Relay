@@ -224,6 +224,7 @@ fn setup_failure_ctx(
             false,
             "imessage",
         )),
+        schedule_destination: None,
         voice: None,
         setup_failure_replies: Arc::new(Mutex::new(Vec::new())),
         sent_replies: Arc::new(Mutex::new(Vec::new())),
@@ -243,6 +244,12 @@ fn setup_failure_job(row_id: i64) -> Job {
         text: "hello".to_string(),
         reply_with_voice: false,
         voice_attachment: None,
+        approval_origin: AnswerOrigin {
+            channel: "imessage".to_string(),
+            thread_key: "imessage:self:me".to_string(),
+            sender_key: "me".to_string(),
+            chat_key: "me".to_string(),
+        },
     }
 }
 
@@ -485,16 +492,22 @@ async fn cursor_save_failure_retries_without_rerunning_or_redelivering() {
 
     assert_eq!(calls.lock().unwrap().len(), 1);
     assert_eq!(gateway.ctx.sent_replies.lock().unwrap().len(), 1);
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 0);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 0);
     assert!(gateway.ack.lock().unwrap().completed.contains(&1));
 
     gateway.tick_fake(vec![inbound]).await;
 
     assert_eq!(calls.lock().unwrap().len(), 1);
     assert_eq!(gateway.ctx.sent_replies.lock().unwrap().len(), 1);
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 1);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 1);
     assert!(gateway.ack.lock().unwrap().completed.is_empty());
-    assert_eq!(Store::open(&state_path).unwrap().cursor("imessage"), 1);
+    assert_eq!(
+        Store::open_at(format!("{state_path}.db"), &state_path)
+            .unwrap()
+            .cursor("imessage")
+            .unwrap(),
+        1
+    );
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
@@ -506,7 +519,9 @@ async fn cursor_save_failure_retries_without_rerunning_or_redelivering() {
 #[test]
 fn setup_failure_completion_unblocks_later_completed_rows() {
     let path = temp_state_path();
-    let store = Arc::new(Mutex::new(Store::open(&path).unwrap()));
+    let store = Arc::new(Mutex::new(
+        Store::open_at(format!("{path}.db"), &path).unwrap(),
+    ));
     let ack = Arc::new(Mutex::new(AckState::default()));
     {
         let mut ack = ack.lock().unwrap();
@@ -526,12 +541,12 @@ fn setup_failure_completion_unblocks_later_completed_rows() {
 
 #[tokio::test]
 async fn session_lookup_failure_completes_in_flight_row() {
-    let blocker = temp_path("state-blocker");
-    let state_path = blocker.join("state.json");
+    let state_path = temp_state_path();
     let store = Arc::new(Mutex::new(
-        Store::open(state_path.to_str().unwrap()).unwrap(),
+        Store::open_at(format!("{state_path}.db"), &state_path).unwrap(),
     ));
-    std::fs::write(&blocker, "not a directory").unwrap();
+    store.lock().unwrap().fail_next_session_save_for_test();
+    store.lock().unwrap().fail_next_cursor_save_for_test();
     let ack = Arc::new(Mutex::new(AckState::default()));
     {
         let mut ack = ack.lock().unwrap();
@@ -554,13 +569,15 @@ async fn session_lookup_failure_completes_in_flight_row() {
     assert!(ack.in_flight.is_empty());
     assert_eq!(ack.completed.iter().copied().collect::<Vec<_>>(), [10, 11]);
 
-    let _ = std::fs::remove_file(blocker);
+    let _ = std::fs::remove_file(format!("{state_path}.db"));
 }
 
 #[tokio::test]
 async fn soul_read_failure_stops_backend_dispatch_and_completes_row() {
     let state_path = temp_state_path();
-    let store = Arc::new(Mutex::new(Store::open(&state_path).unwrap()));
+    let store = Arc::new(Mutex::new(
+        Store::open_at(format!("{state_path}.db"), &state_path).unwrap(),
+    ));
     let sessions_dir = temp_path("soul-failure-sessions");
     let assistant_dir = temp_path("soul-failure-assistant");
     std::fs::create_dir_all(&assistant_dir).unwrap();
@@ -646,29 +663,31 @@ async fn fake_channel_e2e_replies_once_ignores_unallowlisted_and_reuses_session(
                 .unwrap()
                 .to_string_lossy()
         );
-        assert_eq!(calls[0].prompt, "first");
+        assert_eq!(
+            crate::prompt::current_message(&calls[0].prompt).as_deref(),
+            Some("first")
+        );
         assert_eq!(calls[1].session_id, "fake-session");
         assert!(!calls[1].is_new);
         assert_eq!(calls[1].work_dir, calls[0].work_dir);
-        assert_eq!(calls[1].prompt, "second");
+        assert_eq!(
+            crate::prompt::current_message(&calls[1].prompt).as_deref(),
+            Some("second")
+        );
         for call in calls.iter() {
-            assert!(call.instructions.starts_with("Be useful."));
+            let canonical = std::fs::canonicalize(&assistant_dir).unwrap();
+            assert!(call.instructions.starts_with("# Relay-owned base policy"));
+            assert!(call.instructions.contains(r#"{"content":"Be useful."}"#));
+            assert!(call
+                .instructions
+                .contains(&format!(r#""assistant_root":"{}""#, canonical.display())));
             assert!(call.instructions.contains(&format!(
-                "Assistant root: {}",
-                std::fs::canonicalize(&assistant_dir).unwrap().display()
+                r#""context":"{}""#,
+                canonical.join("context").display()
             )));
-            assert!(call.instructions.contains(&format!(
-                "Context: {}",
-                std::fs::canonicalize(assistant_dir.join("context"))
-                    .unwrap()
-                    .display()
-            )));
-            assert!(call.instructions.contains(&format!(
-                "Jobs: {}",
-                std::fs::canonicalize(assistant_dir.join("jobs"))
-                    .unwrap()
-                    .display()
-            )));
+            assert!(call
+                .instructions
+                .contains(&format!(r#""jobs":"{}""#, canonical.join("jobs").display())));
         }
     }
     let events = audit_events(&audit_path);
@@ -778,7 +797,10 @@ async fn imessage_question_delivers_and_plain_number_resolves_once() {
     )
     .await;
     assert_eq!(calls.lock().unwrap().len(), 1);
-    assert_eq!(calls.lock().unwrap()[0].prompt, "hello");
+    assert_eq!(
+        crate::prompt::current_message(&calls.lock().unwrap()[0].prompt).as_deref(),
+        Some("hello")
+    );
     let events = audit_events(&format!("{state_path}.audit.jsonl"));
     assert!(events
         .iter()
@@ -1021,7 +1043,10 @@ async fn missing_backend_session_rotates_and_rehydrates_once() {
     let calls = calls.lock().unwrap();
     assert_eq!(calls.len(), 3);
     assert!(!calls[1].is_new);
-    assert_eq!(calls[1].prompt, "second");
+    assert_eq!(
+        crate::prompt::current_message(&calls[1].prompt).as_deref(),
+        Some("second")
+    );
     assert!(calls[2].is_new);
     assert!(calls[2]
         .prompt
@@ -1031,7 +1056,7 @@ async fn missing_backend_session_rotates_and_rehydrates_once() {
         .contains(r#"{"role":"assistant","content":"fake reply: first"}"#));
     assert!(calls[2]
         .prompt
-        .ends_with(r#"{"role":"user","content":"second"}"#));
+        .ends_with(r#""current_message":{"role":"user","content":"second"}}"#));
     drop(calls);
 
     let events = audit_events(&format!("{state_path}.audit.jsonl"));
@@ -1132,12 +1157,12 @@ async fn backend_switch_and_clear_start_fresh_sessions_with_history() {
     assert!(claude_calls[0].prompt.contains("first"));
     assert!(claude_calls[0]
         .prompt
-        .ends_with(r#"{"role":"user","content":"switch"}"#));
+        .ends_with(r#""current_message":{"role":"user","content":"switch"}}"#));
     assert!(claude_calls[1].is_new);
     assert!(claude_calls[1].prompt.contains("switch"));
     assert!(claude_calls[1]
         .prompt
-        .ends_with(r#"{"role":"user","content":"after clear"}"#));
+        .ends_with(r#""current_message":{"role":"user","content":"after clear"}}"#));
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.audit.jsonl"));
@@ -1173,7 +1198,7 @@ async fn canonical_history_failure_prevents_backend_dispatch_and_cursor_advance(
     assert!(gateway.handles.is_empty());
     assert!(calls.lock().unwrap().is_empty());
     assert!(gateway.ctx.sent_replies.lock().unwrap().is_empty());
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 0);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 0);
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
@@ -1194,7 +1219,7 @@ async fn pending_outbound_is_delivered_after_restart_without_backend_rerun() {
         sessions_dir.to_str().unwrap(),
         assistant_dir.to_str().unwrap(),
     );
-    let mut history = History::open(&config.database_path).unwrap();
+    let mut history = History::open(&config.paths.database).unwrap();
     let inbound_id = history
         .record_inbound(
             "imessage",
@@ -1240,7 +1265,7 @@ async fn pending_outbound_is_delivered_after_restart_without_backend_rerun() {
             .status,
         DeliveryStatus::Delivered
     );
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 1);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 1);
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
@@ -1250,13 +1275,82 @@ async fn pending_outbound_is_delivered_after_restart_without_backend_rerun() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn recovered_outbound_still_presents_authored_schedule_review() {
+    let state_path = temp_state_path();
+    let sessions_dir = temp_path("schedule-history-recovery-sessions");
+    let assistant_dir = temp_path("schedule-history-recovery-assistant");
+    let jobs_dir = assistant_dir.join("jobs");
+    let workdir = assistant_dir.join("work");
+    std::fs::create_dir_all(&jobs_dir).unwrap();
+    std::fs::create_dir_all(&workdir).unwrap();
+    let mut config = test_config(
+        &state_path,
+        sessions_dir.to_str().unwrap(),
+        assistant_dir.to_str().unwrap(),
+    );
+    config.jobs_dir = jobs_dir.to_string_lossy().to_string();
+    std::fs::write(
+        jobs_dir.join("recovered-schedule.md"),
+        format!(
+            "+++\nversion = 1\ntimeout = \"5s\"\nworkdir = {:?}\nbackend = \"codex\"\n\n[[triggers]]\nid = \"morning\"\nkind = \"cron\"\nschedule = \"0 8 * * *\"\ntimezone = \"Europe/London\"\nenabled = true\n+++\n\nPrepare a note.\n",
+            workdir.to_string_lossy()
+        ),
+    )
+    .unwrap();
+    let mut history = History::open(&config.paths.database).unwrap();
+    let inbound_id = history
+        .record_inbound(
+            "imessage",
+            "imessage:dm:+15551234567",
+            "imessage:1",
+            "create a schedule",
+        )
+        .unwrap();
+    history
+        .record_outbound(
+            inbound_id,
+            OutboundOrigin::Backend,
+            Some("codex"),
+            "stored reply",
+        )
+        .unwrap();
+    drop(history);
+
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let mut gateway = Gateway::new(config).unwrap();
+    gateway.ctx.runners = Arc::new(fake_runners(calls.clone()));
+    gateway.ctx.schedule_destination = Some(PrimaryDestination {
+        channel: "imessage".to_string(),
+        target: "+15551234567".to_string(),
+    });
+    gateway
+        .tick_fake(vec![message(
+            1,
+            "+15551234567",
+            "+15551234567",
+            false,
+            "create a schedule",
+        )])
+        .await;
+    gateway.queues.clear();
+    gateway.drain_workers().await;
+
+    assert!(calls.lock().unwrap().is_empty());
+    let replies = gateway.ctx.sent_replies.lock().unwrap();
+    assert!(replies
+        .iter()
+        .any(|(_, text)| text.contains("stored reply")));
+    assert!(replies.iter().any(|(_, text)| {
+        text.contains("Review schedule activation") && text.contains("recovered-schedule")
+    }));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn session_state_save_failure_keeps_reply_for_restart_without_backend_rerun() {
     let state_path = temp_state_path();
     let sessions_dir = temp_path("session-save-failure-sessions");
     let assistant_dir = temp_path("session-save-failure-assistant");
-    let state_blocker = temp_path("session-save-failure-blocker");
     std::fs::create_dir_all(&assistant_dir).unwrap();
-    std::fs::write(&state_blocker, "not a directory").unwrap();
     let first_calls = Arc::new(Mutex::new(Vec::new()));
     let mut gateway = Gateway::new(test_config(
         &state_path,
@@ -1265,14 +1359,10 @@ async fn session_state_save_failure_keeps_reply_for_restart_without_backend_reru
     ))
     .unwrap();
     let store = gateway.store.clone();
-    let broken_state_path = state_blocker.join("state.json");
     gateway.ctx.runners = Arc::new(fake_runners_with_hook(
         first_calls.clone(),
         Some(Arc::new(move || {
-            store
-                .lock()
-                .unwrap()
-                .set_path_for_test(broken_state_path.clone());
+            store.lock().unwrap().fail_next_session_save_for_test();
         })),
     ));
     gateway
@@ -1331,12 +1421,14 @@ async fn session_state_save_failure_keeps_reply_for_restart_without_backend_reru
             "fake reply: hello\n\n-- sent by relay".to_string()
         )]
     );
-    assert_eq!(restarted.store.lock().unwrap().cursor("imessage"), 1);
+    assert_eq!(
+        restarted.store.lock().unwrap().cursor("imessage").unwrap(),
+        1
+    );
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
     let _ = std::fs::remove_file(format!("{state_path}.audit.jsonl"));
-    let _ = std::fs::remove_file(state_blocker);
     let _ = std::fs::remove_dir_all(sessions_dir);
     let _ = std::fs::remove_dir_all(assistant_dir);
 }
@@ -1365,7 +1457,7 @@ async fn exhausted_delivery_batch_retries_without_blocking_cursor() {
 
     assert_eq!(calls.lock().unwrap().len(), 1);
     assert_eq!(gateway.ctx.sent_replies.lock().unwrap().len(), 1);
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 1);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 1);
     let inbound_id = gateway
         .ctx
         .history
@@ -1428,9 +1520,15 @@ async fn telegram_filters_before_agent_and_replies_to_originating_chat() {
     gateway.queues.clear();
     gateway.drain_workers().await;
 
-    assert_eq!(gateway.store.lock().unwrap().cursor("telegram"), 12);
+    assert_eq!(
+        gateway.store.lock().unwrap().cursor("telegram").unwrap(),
+        12
+    );
     assert_eq!(calls.lock().unwrap().len(), 1);
-    assert_eq!(calls.lock().unwrap()[0].prompt, "hello");
+    assert_eq!(
+        crate::prompt::current_message(&calls.lock().unwrap()[0].prompt).as_deref(),
+        Some("hello")
+    );
     assert_eq!(
         gateway.ctx.sent_replies.lock().unwrap().as_slice(),
         [("7".to_string(), "fake reply: hello".to_string())]
@@ -1528,8 +1626,8 @@ async fn enabled_channels_process_concurrently_with_isolated_state_and_origin_re
     tokio::join!(imessage[0].drain_workers(), telegram[0].drain_workers());
 
     let store = imessage[0].store.lock().unwrap();
-    assert_eq!(store.cursor("imessage"), 5);
-    assert_eq!(store.cursor("telegram"), 5);
+    assert_eq!(store.cursor("imessage").unwrap(), 5);
+    assert_eq!(store.cursor("telegram").unwrap(), 5);
     drop(store);
     assert_eq!(
         imessage[0].ctx.sent_replies.lock().unwrap().as_slice(),
@@ -1546,13 +1644,23 @@ async fn enabled_channels_process_concurrently_with_isolated_state_and_origin_re
         .lock()
         .unwrap()
         .iter()
-        .map(|call| call.prompt.clone())
+        .filter_map(|call| crate::prompt::current_message(&call.prompt))
         .collect::<Vec<_>>();
     assert!(prompts.contains(&"from imessage".to_string()));
     assert!(prompts.contains(&"from telegram".to_string()));
-    let persisted = std::fs::read_to_string(&state_path).unwrap();
-    assert!(persisted.contains("imessage:dm:+15551234567"));
-    assert!(persisted.contains("telegram:dm:7"));
+    let mut store = Store::open_at(format!("{state_path}.db"), &state_path).unwrap();
+    assert_eq!(
+        store
+            .session_for("imessage:dm:+15551234567", "codex", "unused".to_string())
+            .unwrap(),
+        ("fake-session".to_string(), false)
+    );
+    assert_eq!(
+        store
+            .session_for("telegram:dm:7", "codex", "unused".to_string())
+            .unwrap(),
+        ("fake-session".to_string(), false)
+    );
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.audit.jsonl"));
@@ -1581,7 +1689,10 @@ async fn telegram_voice_is_transcribed_and_gets_text_and_voice_replies() {
 
     run_messages(&mut gateway, vec![telegram_voice_message(1, 7, 7)]).await;
 
-    assert_eq!(calls.lock().unwrap()[0].prompt, "voice request");
+    assert_eq!(
+        crate::prompt::current_message(&calls.lock().unwrap()[0].prompt).as_deref(),
+        Some("voice request")
+    );
     assert_eq!(
         gateway.ctx.sent_replies.lock().unwrap().as_slice(),
         [("7".to_string(), "fake reply: voice request".to_string())]
@@ -1590,7 +1701,7 @@ async fn telegram_voice_is_transcribed_and_gets_text_and_voice_replies() {
         gateway.ctx.sent_voice_replies.lock().unwrap().as_slice(),
         [("7".to_string(), vec![4, 5, 6])]
     );
-    assert_eq!(gateway.store.lock().unwrap().cursor("telegram"), 1);
+    assert_eq!(gateway.store.lock().unwrap().cursor("telegram").unwrap(), 1);
     let history = gateway
         .ctx
         .history
@@ -1638,7 +1749,7 @@ async fn telegram_voice_without_openai_key_falls_back_without_running_agent() {
     let reply = &replies[0].1;
     assert!(reply.contains("voice.openai_api_key"));
     assert!(reply.contains("OPENAI_API_KEY"));
-    assert_eq!(gateway.store.lock().unwrap().cursor("telegram"), 1);
+    assert_eq!(gateway.store.lock().unwrap().cursor("telegram").unwrap(), 1);
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
@@ -1677,12 +1788,9 @@ async fn slow_voice_transcription_does_not_block_another_telegram_thread() {
         .await;
     tokio::time::timeout(Duration::from_secs(1), async {
         loop {
-            if calls
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|call| call.prompt == "fast text request")
-            {
+            if calls.lock().unwrap().iter().any(|call| {
+                crate::prompt::current_message(&call.prompt).as_deref() == Some("fast text request")
+            }) {
                 break;
             }
             tokio::task::yield_now().await;
@@ -1694,7 +1802,10 @@ async fn slow_voice_transcription_does_not_block_another_telegram_thread() {
         .lock()
         .unwrap()
         .iter()
-        .any(|call| call.prompt == "slow voice request"));
+        .any(
+            |call| crate::prompt::current_message(&call.prompt).as_deref()
+                == Some("slow voice request")
+        ));
 
     release.send(()).unwrap();
     gateway.queues.clear();
@@ -1703,7 +1814,10 @@ async fn slow_voice_transcription_does_not_block_another_telegram_thread() {
         .lock()
         .unwrap()
         .iter()
-        .any(|call| call.prompt == "slow voice request"));
+        .any(
+            |call| crate::prompt::current_message(&call.prompt).as_deref()
+                == Some("slow voice request")
+        ));
 
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
@@ -1745,6 +1859,12 @@ async fn closed_worker_queue_is_recovered_without_another_message() {
         text: "recover older".to_string(),
         reply_with_voice: false,
         voice_attachment: None,
+        approval_origin: AnswerOrigin {
+            channel: "imessage".to_string(),
+            thread_key: thread.to_string(),
+            sender_key: "me@icloud.com".to_string(),
+            chat_key: "me@icloud.com".to_string(),
+        },
     };
 
     let (jobs, rx) = mpsc::channel(QUEUE_DEPTH);
@@ -1774,7 +1894,10 @@ async fn closed_worker_queue_is_recovered_without_another_message() {
         .map(|call| call.prompt.clone())
         .collect::<Vec<_>>();
     assert_eq!(prompts.len(), 1);
-    assert_eq!(prompts[0], "recover older");
+    assert_eq!(
+        crate::prompt::current_message(&prompts[0]).as_deref(),
+        Some("recover older")
+    );
     assert_eq!(gateway.store.lock().unwrap().last_row(), 1);
     let events = audit_events(&format!("{state_path}.audit.jsonl"));
     assert!(events
@@ -1864,7 +1987,10 @@ async fn stop_interrupts_active_run_and_preserves_queued_messages() {
         .iter()
         .map(|call| call.prompt.clone())
         .collect::<Vec<_>>();
-    assert_eq!(prompts[0], "slow");
+    assert_eq!(
+        crate::prompt::current_message(&prompts[0]).as_deref(),
+        Some("slow")
+    );
     assert!(prompts[1].contains(r#"{"role":"user","content":"queued"}"#));
     let replies = gateway.ctx.sent_replies.lock().unwrap();
     assert!(replies
@@ -1875,7 +2001,7 @@ async fn stop_interrupts_active_run_and_preserves_queued_messages() {
         .any(|(_, reply)| reply.contains("Stopped the current request")));
     assert!(replies
         .iter()
-        .any(|(_, reply)| reply.contains(r#"{"role":"user","content":"queued"}"#)));
+        .any(|(_, reply)| reply.contains("fake reply: queued")));
     assert_eq!(gateway.store.lock().unwrap().last_row(), 3);
 
     let _ = std::fs::remove_file(&state_path);
@@ -2033,6 +2159,12 @@ async fn stop_targets_the_current_row_ahead_of_retained_failures() {
         text: text.to_string(),
         reply_with_voice: false,
         voice_attachment: None,
+        approval_origin: AnswerOrigin {
+            channel: "imessage".to_string(),
+            thread_key: thread.to_string(),
+            sender_key: "me@icloud.com".to_string(),
+            chat_key: "me@icloud.com".to_string(),
+        },
     };
     let inbound_ids = ["failed", "active", "/stop"]
         .into_iter()
@@ -2115,7 +2247,7 @@ async fn failed_stop_history_write_retries_before_later_rows() {
 
     assert!(calls.lock().unwrap().is_empty());
     assert!(gateway.queues.is_empty());
-    assert_eq!(gateway.store.lock().unwrap().cursor("imessage"), 0);
+    assert_eq!(gateway.store.lock().unwrap().cursor("imessage").unwrap(), 0);
 
     gateway
         .ctx
@@ -2523,11 +2655,71 @@ async fn missing_primary_disables_new_schedules_without_stopping_gateway() {
         .await
         .unwrap();
 
-    let rows = crate::jobs::Ledger::open(&cfg.database_path)
+    let rows = crate::jobs::Ledger::open(&cfg.paths.database)
         .unwrap()
         .runs(Some("disabled"))
         .unwrap();
     assert!(rows.is_empty());
+    let _ = std::fs::remove_file(&state_path);
+    let _ = std::fs::remove_file(format!("{state_path}.db"));
+    let _ = std::fs::remove_file(format!("{state_path}.audit.jsonl"));
+    let _ = std::fs::remove_dir_all(sessions_dir);
+    let _ = std::fs::remove_dir_all(assistant_dir);
+    let _ = std::fs::remove_dir_all(jobs_dir);
+    let _ = std::fs::remove_dir_all(workdir);
+}
+
+#[test]
+fn missing_primary_closes_upgrade_migration_before_later_schedule_creation() {
+    let state_path = temp_state_path();
+    let sessions_dir = temp_path("missing-primary-migration-sessions");
+    let assistant_dir = temp_path("missing-primary-migration-assistant");
+    let jobs_dir = temp_path("missing-primary-migration-jobs");
+    let workdir = temp_path("missing-primary-migration-work");
+    std::fs::create_dir_all(&assistant_dir).unwrap();
+    std::fs::create_dir_all(&jobs_dir).unwrap();
+    std::fs::create_dir_all(&workdir).unwrap();
+    let mut cfg = test_config(
+        &state_path,
+        sessions_dir.to_str().unwrap(),
+        assistant_dir.to_str().unwrap(),
+    );
+    cfg.jobs_dir = jobs_dir.to_string_lossy().to_string();
+    let history = crate::history::History::open(&cfg.paths.database).unwrap();
+    history.execute_batch_for_test(
+        "DROP TABLE job_schedule_review_questions;
+         DROP TABLE job_schedule_events;
+         DROP TABLE job_schedule_reviews;
+         DROP TABLE job_schedule_legacy_baseline;
+         DROP TABLE job_schedule_meta;
+         PRAGMA user_version = 11;",
+    );
+    drop(history);
+
+    let missing = GatewayGroup::new(cfg.clone()).unwrap();
+    drop(missing);
+    std::fs::write(
+        jobs_dir.join("later.md"),
+        format!(
+            "+++\nversion = 1\ntimeout = \"5s\"\nworkdir = {:?}\nbackend = \"codex\"\n\n[[triggers]]\nid = \"minute\"\nkind = \"cron\"\nschedule = \"* * * * *\"\ntimezone = \"UTC\"\nenabled = true\n+++\n\nRun.\n",
+            workdir.to_string_lossy()
+        ),
+    )
+    .unwrap();
+    cfg.primary_delivery = Some(PrimaryDeliveryConfig {
+        channel: "imessage".to_string(),
+        target: "+15551234567".to_string(),
+    });
+
+    let valid = GatewayGroup::new(cfg.clone()).unwrap();
+    drop(valid);
+    let reviews = crate::jobs::Ledger::open(&cfg.paths.database)
+        .unwrap()
+        .schedule_reviews(Some("later"))
+        .unwrap();
+    assert_eq!(reviews.len(), 1);
+    assert_eq!(reviews[0].status, "proposed");
+
     let _ = std::fs::remove_file(&state_path);
     let _ = std::fs::remove_file(format!("{state_path}.db"));
     let _ = std::fs::remove_file(format!("{state_path}.audit.jsonl"));
@@ -2668,6 +2860,83 @@ async fn route_agent_writes_job_directly_without_approval() {
 }
 
 #[tokio::test]
+async fn direct_authored_schedule_is_saved_then_reviewed_in_its_owner_channel() {
+    let state_path = temp_state_path();
+    let sessions_dir = temp_path("direct-schedule-sessions");
+    let assistant_dir = temp_path("direct-schedule-assistant");
+    std::fs::create_dir_all(&assistant_dir).unwrap();
+    let mut cfg = test_config(
+        &state_path,
+        sessions_dir.to_str().unwrap(),
+        assistant_dir.to_str().unwrap(),
+    );
+    cfg.jobs_dir = assistant_dir.join("jobs").to_string_lossy().to_string();
+    std::fs::create_dir_all(&cfg.jobs_dir).unwrap();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let mut gateway = Gateway::new(cfg.clone()).unwrap();
+    gateway.ctx.schedule_destination = Some(PrimaryDestination {
+        channel: "imessage".to_string(),
+        target: "+15551234567".to_string(),
+    });
+    let job_path = Path::new(&cfg.jobs_dir).join("agent-schedule.md");
+    let hook = Arc::new(move || {
+        std::fs::write(
+            &job_path,
+            "+++\nversion = 1\ntimeout = \"5s\"\nbackend = \"codex\"\n\n[[triggers]]\nid = \"morning\"\nkind = \"cron\"\nschedule = \"0 8 * * *\"\ntimezone = \"Europe/London\"\nenabled = true\n+++\n\nPrepare a note.\n",
+        )
+        .unwrap();
+    });
+    gateway.ctx.runners = Arc::new(fake_runners_with_hook(calls, Some(hook)));
+
+    run_messages(
+        &mut gateway,
+        vec![message(
+            1,
+            "+15551234567",
+            "+15551234567",
+            false,
+            "Create a morning schedule",
+        )],
+    )
+    .await;
+
+    let replies = gateway.ctx.sent_replies.lock().unwrap().clone();
+    let review = replies
+        .iter()
+        .map(|(_, text)| text)
+        .find(|text| text.contains("Review schedule activation"))
+        .expect("schedule review should be delivered after direct authoring");
+    assert!(review.contains("Job: agent-schedule"));
+    assert!(review.contains("0 8 * * *"));
+    let question_id = review
+        .split(|character: char| character.is_whitespace() || character == '`')
+        .find(|part| Uuid::parse_str(part).is_ok())
+        .unwrap()
+        .to_string();
+    drop(replies);
+
+    run_messages(
+        &mut gateway,
+        vec![message(
+            2,
+            "+15551234567",
+            "+15551234567",
+            false,
+            &format!("{question_id} 1"),
+        )],
+    )
+    .await;
+
+    assert!(gateway
+        .ctx
+        .sent_replies
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(_, text)| text.contains("Approved schedule activation")));
+}
+
+#[tokio::test]
 async fn retired_job_approval_reply_explains_direct_creation() {
     let state_path = temp_state_path();
     let sessions_dir = temp_path("retired-job-approval-sessions");
@@ -2763,13 +3032,23 @@ fn test_config(state_path: &str, _sessions_dir: &str, assistant_dir: &str) -> Co
         jobs_dir: format!("{state_path}.jobs"),
         jobs_agent: None,
         jobs_max_timeout: "30m".to_string(),
-        jobs_run_dir: format!("{state_path}.run"),
+        jobs_run_dir_override: None,
         jobs_max_workers: 2,
-        state_path: state_path.to_string(),
-        audit_log_path: format!("{state_path}.audit.jsonl"),
-        database_path: format!("{state_path}.db"),
+        state_path_override: None,
+        audit_log_path_override: None,
+        database_path_override: None,
         audit_log_content: false,
         config_path: String::new(),
+        paths: crate::paths::RelayPaths {
+            root: PathBuf::from(format!("{state_path}.home")),
+            config: PathBuf::from(format!("{state_path}.config.toml")),
+            database: PathBuf::from(format!("{state_path}.db")),
+            state: PathBuf::from(state_path),
+            audit: PathBuf::from(format!("{state_path}.audit.jsonl")),
+            jobs_run: PathBuf::from(format!("{state_path}.run")),
+            inbox: PathBuf::from(format!("{state_path}.slack-inbox.db")),
+            cache: PathBuf::from(format!("{state_path}.cache")),
+        },
         agent_commands: crate::config::AgentCommands::default(),
         assistant_dir: assistant_dir.to_string(),
     }
