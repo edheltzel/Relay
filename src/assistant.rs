@@ -815,7 +815,7 @@ mod tests {
         .unwrap();
         assert_eq!(manifest.version, RELAY_SKILL_VERSION);
         assert_eq!(manifest.sha256, sha256(RELAY_SKILL.as_bytes()));
-        assert_push_skill_links(&target);
+        assert_relay_skill_links(&target);
         assert!(target.join(".git").exists());
         let raw = fs::read_to_string(config).unwrap();
         assert!(raw.contains(&format!(
@@ -897,7 +897,7 @@ mod tests {
             fs::read_to_string(target.join("skills/relay/SKILL.md")).unwrap(),
             RELAY_SKILL
         );
-        assert_push_skill_links(&target);
+        assert_relay_skill_links(&target);
         assert_eq!(fs::read_to_string(config).unwrap(), config_before);
         let _ = fs::remove_dir_all(parent);
     }
@@ -968,7 +968,7 @@ mod tests {
 
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
 
-        assert_push_skill_links(&target);
+        assert_relay_skill_links(&target);
         let _ = fs::remove_dir_all(parent);
     }
 
@@ -981,7 +981,7 @@ mod tests {
         let target = parent.join("assistant");
         let config = parent.join("relay.toml");
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
-        assert_push_skill_links(&target);
+        assert_relay_skill_links(&target);
         for provider in RELAY_SKILL_PROVIDERS {
             let link = target.join(provider).join("skills/relay");
             assert_eq!(fs::read_link(&link).unwrap(), Path::new(RELAY_SKILL_LINK));
@@ -1111,7 +1111,7 @@ mod tests {
         assert!(target.join("context/README.md").is_file());
         assert!(target.join("evals").is_dir());
         assert!(target.join("skills/relay/SKILL.md").is_file());
-        assert_push_skill_links(&target);
+        assert_relay_skill_links(&target);
         let _ = fs::remove_dir_all(parent);
     }
 
@@ -1352,7 +1352,7 @@ mod tests {
         let _ = fs::remove_dir_all(target);
     }
 
-    fn assert_push_skill_links(root: &Path) {
+    fn assert_relay_skill_links(root: &Path) {
         let canonical = fs::canonicalize(root.join("skills/relay")).unwrap();
         for provider in RELAY_SKILL_PROVIDERS {
             let link = root.join(provider).join("skills/relay");
