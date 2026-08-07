@@ -64,7 +64,7 @@ chmod 600 ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
 ```
 
 Create `~/Library/LaunchAgents/com.edheltzel.relay.plist`. You can start from
-[`examples/launchd/com.edheltzel.relay.plist`](https://github.com/edheltzel/relay/blob/main/examples/launchd/com.edheltzel.relay.plist)
+[`examples/launchd/com.edheltzel.relay.plist`](https://github.com/edheltzel/relay/blob/master/examples/launchd/com.edheltzel.relay.plist)
 and replace `YOU` with your macOS user name:
 
 ```xml
@@ -145,7 +145,7 @@ mkdir -p ~/.config/relay ~/.config/systemd/user ~/.relay
 ```
 
 Create `~/.config/systemd/user/relay.service`. You can start from
-[`examples/systemd/relay.service`](https://github.com/edheltzel/relay/blob/main/examples/systemd/relay.service):
+[`examples/systemd/relay.service`](https://github.com/edheltzel/relay/blob/master/examples/systemd/relay.service):
 
 ```ini
 [Unit]
