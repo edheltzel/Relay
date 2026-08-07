@@ -140,6 +140,14 @@ Scheduling starts only when the primary destination is enabled and
 allowlisted. A missing or invalid destination disables new scheduled starts
 without affecting conversations or manual jobs.
 
+Saving an enabled schedule does not start unattended recurrence. Each scheduler
+tick detects new and changed enabled schedules and proposes the exact validated
+revision as a durable review question in the bound allowlisted conversation.
+Recurrence begins only after you approve that revision, and editing or replacing
+an activated job invalidates its schedule until the changed revision is approved
+again. Review state survives restart. Use `relay job reviews [<name>]` to inspect
+proposed, rejected, invalidated, approved, and activated revisions.
+
 Relay runs at most `jobs_max_workers` scheduled jobs concurrently. It does not
 catch up cron occurrences missed while offline. Daylight-saving gaps are
 skipped; repeated local times run once at their first instant. Cron expressions
@@ -189,11 +197,13 @@ delivery attempts, destination, bounded results, and error details.
 
 When a user asks for a job, the assistant writes the complete runbook directly
 to `<assistant_root>/jobs/<lowercase-slug>.md` and runs `relay job validate`.
-There is no separate draft or approval step. The selected agent's filesystem
-permissions control whether it can change the assistant repository.
+There is no separate draft or installation step. The selected agent's filesystem
+permissions control whether it can change the assistant repository. Writing the
+file and activating unattended recurrence remain separate actions: an enabled
+schedule still needs your review before it runs on its own.
 
 For an assistant repository created before this change, replace any `AGENTS.md`
-instruction that says to propose jobs through approval with the direct-write
+instruction that says to propose job files through approval with the direct-write
 rule above. The gateway's runtime instruction overrides that old rule, but
 updating the repository keeps its checked-in guidance accurate.
 
@@ -202,7 +212,9 @@ migration. Replying to one explains that the job must be requested again.
 
 !!! warning
 
-    Jobs have no interactive approval path. Relay runs Codex jobs with full
-    access and no prompts and Claude jobs in `bypassPermissions` mode. Treat
-    every enabled job as code execution by the Relay service user, review
-    changes to the assistant repository, and allow only trusted senders.
+    Job execution has no interactive permission path. Relay runs Codex jobs
+    with full access and no prompts and Claude jobs in `bypassPermissions`
+    mode. Schedule review gates when a job starts on its own, not what it may
+    do once it runs. Treat every enabled job as code execution by the Relay
+    service user, review changes to the assistant repository, and allow only
+    trusted senders.

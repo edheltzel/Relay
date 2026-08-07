@@ -62,9 +62,10 @@ service environment using the narrowest policy that works.
 | --- | --- |
 | `config.toml` | allowlists, routes, paths, and possibly credentials |
 | `<assistant_root>/` | Git-versioned identity, context, evals, jobs, and optional project skills |
-| `~/.relay/state.json` | channel cursors and backend session IDs |
-| `~/.relay/relay.db` | conversation history, approvals, and job runs |
-| `~/.relay/audit.jsonl` | metadata, errors, handles, and optional content |
+| `$RELAY_HOME/relay.db` | conversation history, approvals, job runs, channel cursors, and backend session IDs |
+| `$RELAY_HOME/state.json` | retained legacy state; imported once on upgrade and then kept only as a recovery copy |
+| `$RELAY_HOME/state.json.slack-inbox.db` | accepted Slack events awaiting processing |
+| `$RELAY_HOME/audit.jsonl` | metadata, errors, handles, and optional content |
 
 Keep them on local durable storage with permissions restricted to the service
 user. Keep the assistant directory in its own private Git repository. Never
@@ -89,9 +90,12 @@ This reduces exposure, but it does not make an allowed message harmless.
 
 Bounded `ask_user` questions are stored before delivery, survive restart,
 expire, and can be consumed once. Mismatched, duplicate, ambiguous, cancelled,
-and expired answers do not reach an agent. Job creation does not use this
-mechanism. The selected agent's filesystem permissions control access to jobs
-in the assistant repository.
+and expired answers do not reach an agent. Writing a job file does not use this
+mechanism; the selected agent's filesystem permissions control access to jobs
+in the assistant repository. Activating an enabled schedule does use it: each
+new or changed revision is proposed as a durable review question to the bound
+allowlisted conversation and stays inactive until that exact revision is
+approved. See [jobs and schedules](jobs.md#schedule-a-job).
 
 ## Audit log
 

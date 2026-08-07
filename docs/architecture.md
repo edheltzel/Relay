@@ -73,8 +73,7 @@ flowchart LR
     subgraph relay[Relay gateway]
         poller[Channel poller] --> gateway[Gateway loop]
         gateway --> worker[Per-thread worker]
-        store[(state.json)] <--> gateway
-        history[(relay.db)] <--> gateway
+        history[(relay.db: history, cursors, sessions)] <--> gateway
         assistant[/assistant repo: SOUL.md, context, jobs, project skills/] --> worker
         worker --> adapter[Agent adapter]
     end
@@ -236,29 +235,17 @@ interactive permission prompts, so its own configuration is the boundary.
 
 ## State Model
 
-`state.json` stores channel-specific cursors and channel-qualified sessions:
+`relay.db` stores channel-specific cursors and channel-qualified backend
+sessions alongside the conversation journal. Cursor advancement is a monotonic
+upsert, and session reads, backend changes, and `/clear` rotation run in
+transactions keyed by channel and thread.
 
-```json
-{
-  "last_row_id": 123,
-  "cursors": {
-    "imessage": 123,
-    "telegram": 456,
-    "slack": 789
-  },
-  "sessions": {
-    "imessage:self:you@icloud.com": {
-      "uuid": "backend-session-id",
-      "started": true,
-      "backend": "codex"
-    }
-  }
-}
-```
-
-`last_row_id` remains for compatibility with old iMessage state files. The
-field named `uuid` also remains for compatibility, but it
-now means "backend session id".
+The first startup after upgrading from a JSON-state release imports the
+document configured by `state_path` in one transaction and then leaves that
+file untouched as a private recovery copy. Relay never writes live state to it.
+For the legacy document format, the import rules, and the full table
+inventory, see
+[the architecture reference](https://github.com/edheltzel/relay/blob/master/ARCHITECTURE.md#7-durable-data-model).
 
 If the configured backend changes for a thread, Relay starts a fresh backend
 session instead of trying to resume the old runtime's session.
@@ -324,8 +311,8 @@ backend dispatch. Generated backend, command, and error replies are inserted
 before delivery, with generation and delivery state tracked separately. A
 unique channel event ID makes inbound retries idempotent, and a unique link from
 each inbound message to its outbound response preserves the generation/delivery
-crash boundary. SQLite history does not replace `state.json` cursors or backend
-session IDs in this phase.
+crash boundary. The same database also holds the channel cursors and backend
+session IDs described under [State Model](#state-model).
 
 The same database stores immutable job-run claims and bounded terminal results.
 Markdown runbooks live under `<assistant_root>/jobs`; their write boundary is
@@ -350,9 +337,12 @@ expired terminal state, so later cancellation cannot overwrite the timeout.
 
 Agent-created jobs live directly under `<assistant_root>/jobs`. The gateway
 includes that absolute path in its in-memory instructions and tells the agent
-to run `relay job validate` after a change. Job creation has no separate draft
-or approval step. The selected agent's filesystem permissions control whether
-it can change the assistant repository.
+to run `relay job validate` after a change. Writing a job has no separate draft
+or installation step, and the selected agent's filesystem permissions control
+whether it can change the assistant repository. Activating an enabled schedule
+is a separate action: the scheduler proposes each new or changed revision as a
+durable review question to the bound allowlisted conversation, and unattended
+recurrence starts only after that exact revision is approved.
 
 `audit_log_path` stores a local JSONL event stream for production debugging.
 Audit events record message metadata, routing decisions, approval outcomes,

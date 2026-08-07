@@ -6,11 +6,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
+use sha2::{Digest, Sha256};
 
 use crate::config::{
     validate_inline_slack_token_location, validate_inline_token_location,
     validate_inline_voice_key_location,
 };
+use crate::paths::RelayPaths;
 use crate::util::expand_home;
 
 const SOUL: &str = r#"# SOUL
@@ -29,7 +31,7 @@ const AGENTS: &str = r#"# Assistant repository instructions
 - Treat `SOUL.md` as user-owned identity. Do not edit it unless the user asks.
 - Use `context/` for durable user context and working notes.
 - Treat `evals/` as user-owned evaluation criteria. Do not edit them during evaluation.
-- Store job runbooks in `jobs/`. Create or update them directly when the user asks, then run `relay job validate`.
+- Store job runbooks in `jobs/`. Create or update them directly when the user asks, then run `relay job validate`. Say when an enabled schedule is saved but still awaiting Relay's separate owner review.
 - Keep secrets, sessions, databases, logs, and other runtime state outside this repository.
 "#;
 
@@ -44,8 +46,11 @@ This Git repository contains the durable, user-owned parts of one Relay assistan
 - `context/` contains durable context the assistant may read and update.
 - `evals/` contains reusable agent evaluation criteria.
 - `jobs/` contains installed Relay job runbooks.
+- `skills/` contains reusable capabilities.
 
-Relay owns channels, scheduling, history, security, and delivery outside this repository. Project skills may live here, while the configured agent runtime owns discovery, execution, global skills, MCP servers, and authentication. Chats preserve configured agent permissions. Codex and Claude jobs bypass interactive permissions so unattended work can finish.
+You own `SOUL.md`, `AGENTS.md`, context, evals, jobs, and any skills you add. Relay manages only `skills/relay/` and its `relay` discovery links under `.agents/skills/` and `.claude/skills/`; Codex and Pi share the `.agents/skills/` path. Rerun `relay init` after an upgrade to refresh an unmodified managed skill. Relay never silently replaces a modified managed copy.
+
+Relay owns channels, scheduling, history, security, and delivery outside this repository. The configured agent runtime owns skill discovery and execution, global skills, MCP servers, permissions, and authentication. Chats preserve configured agent permissions. Codex and Claude jobs bypass interactive permissions so unattended work can finish.
 "#;
 
 const CONTEXT_README: &str = r#"# Context
@@ -54,6 +59,12 @@ Store durable facts and working context here when they should be available acros
 
 Good examples include preferences, active projects, people, recurring processes, and reference notes. Keep secrets out of this repository. Start with small, focused Markdown files and update or remove stale information.
 "#;
+
+const RELAY_SKILL: &str = include_str!("../assistant/skills/relay/SKILL.md");
+const RELAY_SKILL_VERSION: u32 = 3;
+const RELAY_SKILL_LINK: &str = "../../skills/relay";
+const RELAY_SKILL_MANIFEST: &str = ".relay-managed.json";
+const RELAY_SKILL_PROVIDERS: [&str; 2] = [".agents", ".claude"];
 
 const DEFAULT_CONFIG: &str = r#"# Telegram quick start.
 channel = "telegram"
@@ -74,6 +85,7 @@ pub struct InitResult {
 }
 
 pub fn init(requested_path: &str, config_path: &str) -> Result<InitResult> {
+    let paths = RelayPaths::discover()?;
     let requested = expand_home(requested_path);
     if requested.starts_with('~') {
         bail!("cannot expand assistant path {requested_path:?}; set HOME or use an absolute path");
@@ -84,15 +96,15 @@ pub fn init(requested_path: &str, config_path: &str) -> Result<InitResult> {
         bail!("cannot expand config path {config_path:?}; set HOME or use an absolute path");
     }
     let config_path = absolute_path(Path::new(&expanded_config)).context("resolve config path")?;
-    let existing_config = inspect_config(&config_path, &target)?;
+    let existing_config = inspect_config(&config_path, &target, &paths)?;
 
-    prepare_target(&target, &config_path)?;
+    prepare_target(&target, &config_path, existing_config)?;
     let root = fs::canonicalize(&target)
         .with_context(|| format!("resolve assistant root {}", target.display()))?;
     scaffold(&root)?;
     let git_initialized = initialize_git(&root)?;
     persist_root(&config_path, &root, existing_config)?;
-    if inspect_config(&config_path, &root)? != ConfigState::MatchingRoot {
+    if inspect_config(&config_path, &root, &paths)? != ConfigState::MatchingRoot {
         bail!(
             "assistant validation failed: {} did not persist assistant_root",
             config_path.display()
@@ -114,11 +126,11 @@ enum ConfigState {
     MatchingRoot,
 }
 
-fn inspect_config(config_path: &Path, target: &Path) -> Result<ConfigState> {
+fn inspect_config(config_path: &Path, target: &Path, paths: &RelayPaths) -> Result<ConfigState> {
     let raw = match fs::read_to_string(config_path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            validate_runtime_boundary(None, target)?;
+            validate_runtime_boundary(None, target, paths)?;
             return Ok(ConfigState::MissingFile);
         }
         Err(error) => {
@@ -129,7 +141,7 @@ fn inspect_config(config_path: &Path, target: &Path) -> Result<ConfigState> {
         toml::from_str(&raw).with_context(|| format!("parse config {}", config_path.display()))?;
     let table = value.as_table().context("config must be a TOML table")?;
     validate_config_secrets(config_path, target, table)?;
-    validate_runtime_boundary(Some(table), target)?;
+    validate_runtime_boundary(Some(table), target, paths)?;
     if table.contains_key("assistant_dir") || table.contains_key("jobs_dir") {
         bail!(
             "{} uses legacy assistant_dir or jobs_dir settings. Move SOUL.md, context, and jobs under one assistant directory, replace those settings with assistant_root, then rerun relay init.",
@@ -195,18 +207,38 @@ fn validate_config_secrets(config_path: &Path, target: &Path, config: &toml::Tab
     Ok(())
 }
 
-fn validate_runtime_boundary(config: Option<&toml::Table>, target: &Path) -> Result<()> {
+fn validate_runtime_boundary(
+    config: Option<&toml::Table>,
+    target: &Path,
+    defaults: &RelayPaths,
+) -> Result<()> {
     let assistant = resolve_existing_or_lexical(target)?;
-    let jobs_run = configured_runtime_path(config, "jobs_run_dir", "~/.relay/run")?;
+    let runtime = defaults.clone().with_overrides(
+        configured_override(config, "state_path")?,
+        configured_override(config, "database_path")?,
+        configured_override(config, "audit_log_path")?,
+        configured_override(config, "jobs_run_dir")?,
+    )?;
+    let relay_home = resolve_existing_or_lexical(&runtime.root)?;
+    if assistant.starts_with(&relay_home) || relay_home.starts_with(&assistant) {
+        bail!(
+            "assistant_root {} must stay outside Relay home {}; choose a separate assistant repository or set RELAY_HOME to a separate runtime directory",
+            assistant.display(),
+            relay_home.display()
+        );
+    }
+    let jobs_run = resolve_existing_or_lexical(&runtime.jobs_run)?;
     if assistant.starts_with(&jobs_run) || jobs_run.starts_with(&assistant) {
         bail!("jobs_run_dir must stay outside assistant_root; choose a separate assistant path or update jobs_run_dir");
     }
-    for (key, default) in [
-        ("state_path", "~/.relay/state.json"),
-        ("database_path", "~/.relay/relay.db"),
-        ("audit_log_path", "~/.relay/audit.jsonl"),
+    for (key, path) in [
+        ("state_path", runtime.state.as_path()),
+        ("database_path", runtime.database.as_path()),
+        ("audit_log_path", runtime.audit.as_path()),
+        ("Slack inbox", runtime.inbox.as_path()),
+        ("cache directory", runtime.cache.as_path()),
     ] {
-        let runtime = configured_runtime_path(config, key, default)?;
+        let runtime = resolve_existing_or_lexical(path)?;
         if runtime.starts_with(&assistant) {
             bail!("{key} must stay outside assistant_root; choose a separate assistant path or update {key}");
         }
@@ -214,26 +246,23 @@ fn validate_runtime_boundary(config: Option<&toml::Table>, target: &Path) -> Res
     Ok(())
 }
 
-fn configured_runtime_path(
-    config: Option<&toml::Table>,
-    key: &str,
-    default: &str,
-) -> Result<PathBuf> {
-    let value = match config.and_then(|table| table.get(key)) {
-        Some(value) => value
-            .as_str()
-            .with_context(|| format!("{key} must be a string"))?,
-        None => default,
-    };
-    let expanded = expand_home(value);
-    if expanded.starts_with('~') {
-        bail!("cannot expand configured {key} {value:?}");
-    }
-    let path = Path::new(&expanded);
-    if !path.is_absolute() {
-        bail!("{key} must be an absolute path or start with ~");
-    }
-    resolve_existing_or_lexical(path)
+fn configured_override<'a>(config: Option<&'a toml::Table>, key: &str) -> Result<Option<&'a str>> {
+    config
+        .and_then(|table| table.get(key))
+        .map(|value| {
+            let value = value
+                .as_str()
+                .with_context(|| format!("{key} must be a string"))?;
+            let expanded = expand_home(value);
+            if expanded.starts_with('~') {
+                bail!("cannot expand configured {key} {value:?}");
+            }
+            if !Path::new(&expanded).is_absolute() {
+                bail!("{key} must be an absolute path or start with ~");
+            }
+            Ok(value)
+        })
+        .transpose()
 }
 
 fn configured_root(config_path: &Path, configured: &str) -> Result<PathBuf> {
@@ -305,7 +334,7 @@ fn resolve_existing_or_lexical(path: &Path) -> Result<PathBuf> {
     Ok(resolved)
 }
 
-fn prepare_target(target: &Path, config_path: &Path) -> Result<()> {
+fn prepare_target(target: &Path, config_path: &Path, config_state: ConfigState) -> Result<()> {
     if target.exists() {
         if !target.is_dir() {
             bail!("assistant target {} is not a directory", target.display());
@@ -314,6 +343,19 @@ fn prepare_target(target: &Path, config_path: &Path) -> Result<()> {
             .with_context(|| format!("inspect assistant target {}", target.display()))?
             .collect::<std::io::Result<Vec<_>>>()?;
         let resolved_config = resolve_existing_or_lexical(config_path)?;
+        match fs::symlink_metadata(target.join(".git")) {
+            Ok(_) => {
+                let resolved_target = fs::canonicalize(target)
+                    .with_context(|| format!("resolve assistant target {}", target.display()))?;
+                verify_git_root(&resolved_target)
+                    .context("validate existing Git metadata before init")?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("inspect Git metadata under {}", target.display()))
+            }
+        }
         if entries.is_empty()
             || entries.iter().all(|entry| {
                 entry.file_name() == ".git"
@@ -321,12 +363,9 @@ fn prepare_target(target: &Path, config_path: &Path) -> Result<()> {
                         .is_ok_and(|path| path == resolved_config)
             })
         {
-            if target.join(".git").exists() {
-                verify_git_root(target).context("validate existing Git metadata before init")?;
-            }
             return Ok(());
         }
-        if !valid_assistant_structure(target) {
+        if !valid_assistant_structure(target) && config_state != ConfigState::MatchingRoot {
             bail!(
                 "assistant target {} is non-empty but is not a complete assistant repository. Choose an empty directory or a valid assistant containing SOUL.md, AGENTS.md, README.md, context/README.md, and jobs/.",
                 target.display()
@@ -347,7 +386,203 @@ fn scaffold(root: &Path) -> Result<()> {
     create_file(&root.join("CLAUDE.md"), CLAUDE)?;
     create_file(&root.join("README.md"), README)?;
     create_file(&root.join("context/README.md"), CONTEXT_README)?;
+    install_relay_skill(root)?;
     Ok(())
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct ManagedSkillManifest {
+    version: u32,
+    sha256: String,
+}
+
+fn install_relay_skill(root: &Path) -> Result<()> {
+    let skills = root.join("skills");
+    let skill_dir = skills.join("relay");
+    let skill_path = skill_dir.join("SKILL.md");
+    let manifest_path = skill_dir.join(RELAY_SKILL_MANIFEST);
+    create_directory(&skills)?;
+    create_directory(&skill_dir)?;
+
+    let actual = read_optional_regular_file(&skill_path)?;
+    let manifest = read_skill_manifest(&manifest_path)?;
+    match manifest {
+        Some(manifest) => {
+            if manifest.version > RELAY_SKILL_VERSION {
+                bail!(
+                    "{} is managed by Relay skill version {}, which is newer than this Relay binary supports (version {}). Upgrade Relay instead of downgrading the skill.",
+                    skill_path.display(),
+                    manifest.version,
+                    RELAY_SKILL_VERSION
+                );
+            }
+            match actual.as_deref() {
+                Some(actual) if actual == RELAY_SKILL.as_bytes() => {
+                    if manifest.version != RELAY_SKILL_VERSION
+                        || manifest.sha256 != sha256(RELAY_SKILL.as_bytes())
+                    {
+                        write_skill_manifest(&manifest_path)?;
+                    }
+                }
+                Some(actual) if sha256(actual) != manifest.sha256 => {
+                    return Err(user_modified_skill_error(&skill_path));
+                }
+                Some(_) => {
+                    if manifest.version == RELAY_SKILL_VERSION {
+                        return Err(user_modified_skill_error(&skill_path));
+                    }
+                    write_atomic_file(&skill_path, RELAY_SKILL.as_bytes())?;
+                    write_skill_manifest(&manifest_path)?;
+                }
+                None => {
+                    write_atomic_file(&skill_path, RELAY_SKILL.as_bytes())?;
+                    write_skill_manifest(&manifest_path)?;
+                }
+            }
+        }
+        None => match actual.as_deref() {
+            None => {
+                write_atomic_file(&skill_path, RELAY_SKILL.as_bytes())?;
+                write_skill_manifest(&manifest_path)?;
+            }
+            Some(actual) if actual == RELAY_SKILL.as_bytes() => {
+                write_skill_manifest(&manifest_path)?;
+            }
+            Some(_) => {
+                bail!(
+                    "Relay found an existing unmanaged skill at {} and left it unchanged. Rename that skill, or move it to a different skill directory, then rerun `relay init`.",
+                    skill_path.display()
+                );
+            }
+        },
+    }
+
+    for provider in RELAY_SKILL_PROVIDERS {
+        let provider_skills = root.join(provider).join("skills");
+        create_directory(&root.join(provider))?;
+        create_directory(&provider_skills)?;
+        create_skill_link(&provider_skills.join("relay"))?;
+    }
+    Ok(())
+}
+
+fn read_optional_regular_file(path: &Path) -> Result<Option<Vec<u8>>> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => fs::read(path)
+            .map(Some)
+            .with_context(|| format!("read {}", path.display())),
+        Ok(_) => bail!(
+            "{} must be a regular file inside the assistant repository; Relay left it unchanged",
+            path.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
+}
+
+fn read_skill_manifest(path: &Path) -> Result<Option<ManagedSkillManifest>> {
+    let Some(raw) = read_optional_regular_file(path)? else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&raw)
+        .with_context(|| {
+            format!(
+                "parse managed skill metadata {}. Relay left the skill unchanged; restore this file or move the skill before rerunning `relay init`",
+                path.display()
+            )
+        })
+        .map(Some)
+}
+
+fn write_skill_manifest(path: &Path) -> Result<()> {
+    let manifest = ManagedSkillManifest {
+        version: RELAY_SKILL_VERSION,
+        sha256: sha256(RELAY_SKILL.as_bytes()),
+    };
+    let mut raw = serde_json::to_vec_pretty(&manifest).context("serialize Relay skill metadata")?;
+    raw.push(b'\n');
+    write_atomic_file(path, &raw)
+}
+
+fn sha256(contents: &[u8]) -> String {
+    crate::util::hex_lower(Sha256::digest(contents))
+}
+
+fn user_modified_skill_error(path: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Relay found a user-modified managed skill at {} and left it unchanged. Move your changes to a differently named skill or restore the managed copy, then rerun `relay init`.",
+        path.display()
+    )
+}
+
+fn write_atomic_file(path: &Path, contents: &[u8]) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_file() {
+                bail!(
+                    "{} must be a regular file inside the assistant repository; Relay left it unchanged",
+                    path.display()
+                );
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| format!("inspect managed file {}", path.display()))
+        }
+    }
+    let parent = path.parent().context("managed file path has no parent")?;
+    let name = path
+        .file_name()
+        .context("managed file path has no file name")?
+        .to_string_lossy();
+    let temporary = parent.join(format!(".{name}.relay-init-{}", uuid::Uuid::new_v4()));
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .with_context(|| format!("create temporary managed file {}", temporary.display()))?;
+        file.write_all(contents)
+            .with_context(|| format!("write temporary managed file {}", temporary.display()))?;
+        file.sync_all()
+            .with_context(|| format!("sync temporary managed file {}", temporary.display()))?;
+        fs::rename(&temporary, path)
+            .with_context(|| format!("replace managed file {}", path.display()))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+fn create_skill_link(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            let target = fs::read_link(path)
+                .with_context(|| format!("read skill link {}", path.display()))?;
+            if target == Path::new(RELAY_SKILL_LINK) {
+                return Ok(());
+            }
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(RELAY_SKILL_LINK, path)
+                    .with_context(|| format!("create skill link {}", path.display()))?;
+                return Ok(());
+            }
+            #[cfg(not(unix))]
+            bail!("Relay project skills require symbolic link support");
+        }
+        Err(error) => {
+            return Err(error).with_context(|| format!("inspect skill link {}", path.display()))
+        }
+    }
+    bail!(
+        "Relay found a conflicting provider skill at {} and left it unchanged. Move or remove that path, then rerun `relay init`.",
+        path.display()
+    )
 }
 
 fn create_directory(path: &Path) -> Result<()> {
@@ -570,12 +805,60 @@ mod tests {
         assert!(target.join("evals").is_dir());
         assert!(target.join("jobs").is_dir());
         assert_eq!(fs::read_dir(target.join("jobs")).unwrap().count(), 0);
+        assert_eq!(
+            fs::read_to_string(target.join("skills/relay/SKILL.md")).unwrap(),
+            RELAY_SKILL
+        );
+        let manifest: ManagedSkillManifest = serde_json::from_str(
+            &fs::read_to_string(target.join("skills/relay/.relay-managed.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(manifest.version, RELAY_SKILL_VERSION);
+        assert_eq!(manifest.sha256, sha256(RELAY_SKILL.as_bytes()));
+        assert_relay_skill_links(&target);
         assert!(target.join(".git").exists());
         let raw = fs::read_to_string(config).unwrap();
         assert!(raw.contains(&format!(
             "assistant_root = {}",
             toml::Value::String(result.root.to_string_lossy().to_string())
         )));
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn configured_partial_assistant_with_broken_git_link_is_not_scaffolded() {
+        use std::os::unix::fs::symlink;
+
+        let parent = temp_dir("assistant-configured-partial-broken-git-link");
+        let target = parent.join("assistant");
+        let missing_git = parent.join("missing-git");
+        let config = parent.join("relay.toml");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("SOUL.md"), "Existing identity\n").unwrap();
+        symlink(&missing_git, target.join(".git")).unwrap();
+        fs::write(
+            &config,
+            format!(
+                "assistant_root = {}\n",
+                toml::Value::String(target.to_string_lossy().to_string())
+            ),
+        )
+        .unwrap();
+
+        let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("validate existing Git metadata"));
+        assert_eq!(
+            fs::read_to_string(target.join("SOUL.md")).unwrap(),
+            "Existing identity\n"
+        );
+        assert!(!target.join("AGENTS.md").exists());
+        assert!(!target.join("README.md").exists());
+        assert!(!target.join("context").exists());
+        assert!(!target.join("jobs").exists());
+        assert!(!target.join("skills").exists());
+        assert!(!missing_git.exists());
         let _ = fs::remove_dir_all(parent);
     }
 
@@ -586,6 +869,7 @@ mod tests {
         let config = parent.join("relay.toml");
         init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
         fs::write(target.join("SOUL.md"), "My identity\n").unwrap();
+        fs::write(target.join("AGENTS.md"), "My repository rules\n").unwrap();
         fs::write(target.join("context/private.md"), "Keep me\n").unwrap();
         fs::remove_file(target.join("CLAUDE.md")).unwrap();
         let config_before = fs::read_to_string(&config).unwrap();
@@ -598,6 +882,10 @@ mod tests {
             "My identity\n"
         );
         assert_eq!(
+            fs::read_to_string(target.join("AGENTS.md")).unwrap(),
+            "My repository rules\n"
+        );
+        assert_eq!(
             fs::read_to_string(target.join("context/private.md")).unwrap(),
             "Keep me\n"
         );
@@ -605,7 +893,137 @@ mod tests {
             fs::read_to_string(target.join("CLAUDE.md")).unwrap(),
             CLAUDE
         );
+        assert_eq!(
+            fs::read_to_string(target.join("skills/relay/SKILL.md")).unwrap(),
+            RELAY_SKILL
+        );
+        assert_relay_skill_links(&target);
         assert_eq!(fs::read_to_string(config).unwrap(), config_before);
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn refreshes_an_unmodified_older_managed_skill() {
+        let parent = temp_dir("assistant-skill-upgrade");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+        let skill_path = target.join("skills/relay/SKILL.md");
+        let manifest_path = target.join("skills/relay/.relay-managed.json");
+        let old_skill = b"---\nname: relay\ndescription: Old managed Relay skill.\n---\n";
+        fs::write(&skill_path, old_skill).unwrap();
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec_pretty(&ManagedSkillManifest {
+                version: 0,
+                sha256: sha256(old_skill),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+
+        assert_eq!(fs::read_to_string(skill_path).unwrap(), RELAY_SKILL);
+        let manifest: ManagedSkillManifest =
+            serde_json::from_str(&fs::read_to_string(manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest.version, RELAY_SKILL_VERSION);
+        assert_eq!(manifest.sha256, sha256(RELAY_SKILL.as_bytes()));
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn refuses_to_overwrite_a_user_modified_managed_skill() {
+        let parent = temp_dir("assistant-skill-modified");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+        let skill_path = target.join("skills/relay/SKILL.md");
+        let modified = format!("{RELAY_SKILL}\nUser addition.\n");
+        fs::write(&skill_path, &modified).unwrap();
+        fs::write(target.join("SOUL.md"), "User identity.\n").unwrap();
+
+        let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("user-modified managed skill"));
+        assert!(error.to_string().contains("left it unchanged"));
+        assert!(error.to_string().contains("differently named skill"));
+        assert_eq!(fs::read_to_string(skill_path).unwrap(), modified);
+        assert_eq!(
+            fs::read_to_string(target.join("SOUL.md")).unwrap(),
+            "User identity.\n"
+        );
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn recreates_missing_provider_directories_and_links() {
+        let parent = temp_dir("assistant-skill-provider-directories");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+        for provider in RELAY_SKILL_PROVIDERS {
+            fs::remove_dir_all(target.join(provider)).unwrap();
+        }
+
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+
+        assert_relay_skill_links(&target);
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_skill_paths_stay_inside_the_assistant() {
+        use std::os::unix::fs::symlink;
+
+        let parent = temp_dir("assistant-skill-path-safety");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+        assert_relay_skill_links(&target);
+        for provider in RELAY_SKILL_PROVIDERS {
+            let link = target.join(provider).join("skills/relay");
+            assert_eq!(fs::read_link(&link).unwrap(), Path::new(RELAY_SKILL_LINK));
+            assert_eq!(
+                fs::canonicalize(link).unwrap(),
+                fs::canonicalize(target.join("skills/relay")).unwrap()
+            );
+        }
+
+        let outside = parent.join("outside-skill.md");
+        fs::write(&outside, "outside\n").unwrap();
+        let skill_path = target.join("skills/relay/SKILL.md");
+        fs::remove_file(&skill_path).unwrap();
+        symlink(&outside, &skill_path).unwrap();
+
+        let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("must be a regular file"));
+        assert_eq!(fs::read_to_string(outside).unwrap(), "outside\n");
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_to_replace_a_conflicting_provider_skill() {
+        use std::os::unix::fs::symlink;
+
+        let parent = temp_dir("assistant-skill-provider-conflict");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+        let link = target.join(".claude/skills/relay");
+        fs::remove_file(&link).unwrap();
+        symlink("../../skills/user-skill", &link).unwrap();
+
+        let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("conflicting provider skill"));
+        assert_eq!(
+            fs::read_link(&link).unwrap(),
+            Path::new("../../skills/user-skill")
+        );
         let _ = fs::remove_dir_all(parent);
     }
 
@@ -656,6 +1074,75 @@ mod tests {
             assert!(!target.join("jobs").exists());
             assert!(!config.exists());
         }
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn completes_a_partial_configured_assistant_without_overwriting_user_files() {
+        let parent = temp_dir("assistant-configured-partial");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        fs::create_dir_all(target.join("context")).unwrap();
+        fs::create_dir(target.join("jobs")).unwrap();
+        fs::write(target.join("SOUL.md"), "Existing identity\n").unwrap();
+        fs::write(target.join("context/private.md"), "Existing context\n").unwrap();
+        fs::write(
+            &config,
+            format!(
+                "assistant_root = {}\n",
+                toml::Value::String(target.to_string_lossy().to_string())
+            ),
+        )
+        .unwrap();
+
+        let result = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap();
+
+        assert_eq!(result.root, fs::canonicalize(&target).unwrap());
+        assert_eq!(
+            fs::read_to_string(target.join("SOUL.md")).unwrap(),
+            "Existing identity\n"
+        );
+        assert_eq!(
+            fs::read_to_string(target.join("context/private.md")).unwrap(),
+            "Existing context\n"
+        );
+        assert!(target.join("AGENTS.md").is_file());
+        assert!(target.join("README.md").is_file());
+        assert!(target.join("context/README.md").is_file());
+        assert!(target.join("evals").is_dir());
+        assert!(target.join("skills/relay/SKILL.md").is_file());
+        assert_relay_skill_links(&target);
+        let _ = fs::remove_dir_all(parent);
+    }
+
+    #[test]
+    fn configured_partial_assistant_with_invalid_git_is_not_scaffolded() {
+        let parent = temp_dir("assistant-configured-partial-invalid-git");
+        let target = parent.join("assistant");
+        let config = parent.join("relay.toml");
+        fs::create_dir_all(target.join(".git")).unwrap();
+        fs::write(target.join("SOUL.md"), "Existing identity\n").unwrap();
+        fs::write(
+            &config,
+            format!(
+                "assistant_root = {}\n",
+                toml::Value::String(target.to_string_lossy().to_string())
+            ),
+        )
+        .unwrap();
+
+        let error = init(target.to_str().unwrap(), config.to_str().unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("validate existing Git metadata"));
+        assert_eq!(
+            fs::read_to_string(target.join("SOUL.md")).unwrap(),
+            "Existing identity\n"
+        );
+        assert!(!target.join("AGENTS.md").exists());
+        assert!(!target.join("README.md").exists());
+        assert!(!target.join("context").exists());
+        assert!(!target.join("jobs").exists());
+        assert!(!target.join("skills").exists());
         let _ = fs::remove_dir_all(parent);
     }
 
@@ -863,5 +1350,17 @@ mod tests {
         assert!(error.to_string().contains("inline Slack tokens"));
         assert!(!target.join("SOUL.md").exists());
         let _ = fs::remove_dir_all(target);
+    }
+
+    fn assert_relay_skill_links(root: &Path) {
+        let canonical = fs::canonicalize(root.join("skills/relay")).unwrap();
+        for provider in RELAY_SKILL_PROVIDERS {
+            let link = root.join(provider).join("skills/relay");
+            assert!(fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+            assert_eq!(fs::canonicalize(link).unwrap(), canonical);
+        }
     }
 }

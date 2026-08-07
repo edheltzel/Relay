@@ -17,9 +17,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tracing::{error, info, warn};
 
 use crate::agent::Runner;
-#[cfg(test)]
-use crate::approval::AnswerOrigin;
-use crate::approval::AnswerOutcome;
+use crate::approval::{AnswerOrigin, AnswerOutcome};
 use crate::audit::{AuditEvent, AuditLog};
 use crate::channel::{Channel, InboundVoice, RawMessage};
 use crate::config::{AgentBackend, ChannelKind, Config, PrimaryDeliveryConfig};
@@ -44,6 +42,7 @@ struct Job {
     text: String,
     reply_with_voice: bool,
     voice_attachment: Option<InboundVoice>,
+    approval_origin: AnswerOrigin,
 }
 
 /// Shared, cheaply cloneable context handed to each worker task.
@@ -60,6 +59,7 @@ struct Ctx {
     assistant_dir: String,
     audit: Arc<AuditLog>,
     voice: Option<Voice>,
+    schedule_destination: Option<PrimaryDestination>,
     #[cfg(test)]
     setup_failure_replies: Arc<Mutex<Vec<String>>>,
     #[cfg(test)]
@@ -115,11 +115,17 @@ struct WorkerState {
 
 impl GatewayGroup {
     pub fn new(cfg: Config) -> Result<Self> {
+        jobs::Ledger::capture_legacy_schedule_baseline(&cfg)?;
         let enabled = cfg.enabled_channel_kinds()?;
-        let store = Arc::new(Mutex::new(Store::open(&cfg.state_path)?));
-        let history = Arc::new(Mutex::new(History::open(&cfg.database_path).with_context(
-            || format!("open canonical history database {}", cfg.database_path),
-        )?));
+        let store = Arc::new(Mutex::new(Store::open(&cfg.paths)?));
+        let history = Arc::new(Mutex::new(
+            History::open(&cfg.paths.database).with_context(|| {
+                format!(
+                    "open canonical history database {}",
+                    cfg.paths.database.display()
+                )
+            })?,
+        ));
         let runners = Arc::new(runners(&cfg));
         let audit_lock = Arc::new(Mutex::new(()));
         let mut gateways = Vec::with_capacity(enabled.len());
@@ -133,11 +139,32 @@ impl GatewayGroup {
                 audit_lock.clone(),
             )?);
         }
-        Ok(Self {
+        let mut group = Self {
             gateways,
             primary_delivery: cfg.primary_delivery.clone(),
             cfg,
-        })
+        };
+        let destination = group.primary_destination().ok();
+        let mut ledger = jobs::Ledger::open(&group.cfg.paths.database)?;
+        if let Some(destination) = destination {
+            let catalog = jobs::Catalog::load(&group.cfg)?;
+            ledger.recover_answered_schedule_reviews(&group.cfg, now_ms())?;
+            ledger.reconcile_schedule_reviews(
+                &catalog,
+                &destination.channel,
+                &destination.target,
+                now_ms(),
+            )?;
+            for gateway in &mut group.gateways {
+                gateway.ctx.schedule_destination = Some(destination.clone());
+            }
+        } else {
+            ledger.settle_legacy_schedule_migration_without_destination()?;
+        }
+        if let Some(gateway) = group.gateways.first() {
+            audit_schedule_events(&gateway.ctx, &mut ledger);
+        }
+        Ok(group)
     }
 
     pub fn primary_destination(&self) -> Result<PrimaryDestination> {
@@ -254,7 +281,8 @@ async fn run_scheduler(
             }
             _ = ticker.tick() => {
                 let contexts = contexts.clone();
-                if let Err(error) = scheduler.tick(now_ms(), move |channel, target, text, start_chunk, progress| {
+                let audit_contexts = contexts.clone();
+                let result = scheduler.tick(now_ms(), move |channel, target, text, start_chunk, progress| {
                     let contexts = contexts.clone();
                     async move {
                         let Some(ctx) = contexts.get(&channel) else {
@@ -276,7 +304,17 @@ async fn run_scheduler(
                         };
                         scheduled_reply_to(ctx, &target, &text, start_chunk, progress).await
                     }
-                }).await {
+                }).await;
+                if let Some(ctx) = audit_contexts.values().next() {
+                    scheduler.take_schedule_events();
+                    match jobs::Ledger::open(&ctx.cfg.paths.database) {
+                        Ok(mut ledger) => audit_schedule_events(ctx, &mut ledger),
+                        Err(error) => {
+                            error!("open schedule audit outbox: {error:#}");
+                        }
+                    }
+                }
+                if let Err(error) = result {
                     error!("job scheduler tick failed: {error:#}");
                 }
             }
@@ -328,10 +366,15 @@ where
 impl Gateway {
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(cfg: Config) -> Result<Self> {
-        let store = Arc::new(Mutex::new(Store::open(&cfg.state_path)?));
-        let history = Arc::new(Mutex::new(History::open(&cfg.database_path).with_context(
-            || format!("open canonical history database {}", cfg.database_path),
-        )?));
+        let store = Arc::new(Mutex::new(Store::open(&cfg.paths)?));
+        let history = Arc::new(Mutex::new(
+            History::open(&cfg.paths.database).with_context(|| {
+                format!(
+                    "open canonical history database {}",
+                    cfg.paths.database.display()
+                )
+            })?,
+        ));
         let runners = Arc::new(runners(&cfg));
         let kind = cfg
             .enabled_channel_kinds()?
@@ -352,7 +395,7 @@ impl Gateway {
         let ack = Arc::new(Mutex::new(AckState::default()));
         let channel = Channel::new_for(&cfg, kind)?;
         let audit = Arc::new(AuditLog::with_lock(
-            cfg.audit_log_path.clone(),
+            cfg.paths.audit.clone(),
             cfg.audit_log_content,
             channel.id(),
             audit_lock,
@@ -368,6 +411,7 @@ impl Gateway {
             reply_marker: crate::channel::REPLY_MARKER.to_string(),
             assistant_dir: cfg.assistant_dir.clone(),
             audit,
+            schedule_destination: None,
             #[cfg(not(test))]
             voice: Voice::from_config(&cfg),
             #[cfg(test)]
@@ -483,7 +527,13 @@ impl Gateway {
 
     async fn skip_backlog(&self) -> Result<()> {
         let channel_id = self.channel.id();
-        if self.store.lock().unwrap().has_cursor(channel_id) {
+        if self
+            .store
+            .lock()
+            .unwrap()
+            .has_cursor(channel_id)
+            .with_context(|| format!("check initial {channel_id} cursor"))?
+        {
             return Ok(());
         }
         let max = self
@@ -501,7 +551,16 @@ impl Gateway {
     }
 
     async fn tick(&mut self) {
-        let since = self.store.lock().unwrap().cursor(self.channel.id());
+        let since = match self.store.lock().unwrap().cursor(self.channel.id()) {
+            Ok(cursor) => cursor,
+            Err(error) => {
+                error!(
+                    "{} cursor read error; polling paused: {error:#}",
+                    self.channel.id()
+                );
+                return;
+            }
+        };
         let msgs = match self.channel.poll(since).await {
             Ok(messages) => messages,
             Err(e) => {
@@ -521,7 +580,16 @@ impl Gateway {
     async fn process_messages(&mut self, msgs: Vec<RawMessage>) {
         self.recover_closed_workers();
         persist_cursor(&self.store, &self.ack, self.channel.id());
-        let since = self.store.lock().unwrap().cursor(self.channel.id());
+        let since = match self.store.lock().unwrap().cursor(self.channel.id()) {
+            Ok(cursor) => cursor,
+            Err(error) => {
+                error!(
+                    "{} cursor read error; message processing paused: {error:#}",
+                    self.channel.id()
+                );
+                return;
+            }
+        };
         for m in &msgs {
             if m.row_id <= since {
                 continue;
@@ -550,6 +618,80 @@ impl Gateway {
                     Ok(AnswerOutcome::NotAnAnswer) => {}
                     Ok(outcome @ (AnswerOutcome::Selected(_) | AnswerOutcome::Duplicate(_))) => {
                         self.audit_approval(m.row_id, &thread, &outcome);
+                        let correlation_id = match &outcome {
+                            AnswerOutcome::Selected(answer) => &answer.correlation_id,
+                            AnswerOutcome::Duplicate(id) => id,
+                            _ => unreachable!(),
+                        };
+                        let reviewer = format!(
+                            "channel={} thread={} sender={} chat={}",
+                            approval_origin.channel,
+                            approval_origin.thread_key,
+                            approval_origin.sender_key,
+                            approval_origin.chat_key
+                        );
+                        let decision =
+                            jobs::Ledger::open(&self.cfg.paths.database).and_then(|mut ledger| {
+                                let decision = ledger.resolve_schedule_answer(
+                                    &self.cfg,
+                                    correlation_id,
+                                    &reviewer,
+                                    now_ms(),
+                                )?;
+                                audit_schedule_events(&self.ctx, &mut ledger);
+                                Ok(decision)
+                            });
+                        let decision = match decision {
+                            Ok(decision) => decision,
+                            Err(error) => {
+                                error!("[{thread}] schedule review decision failed: {error:#}");
+                                self.audit(self.ctx.audit.failed(
+                                    "schedule_review_decision_failed",
+                                    m.row_id,
+                                    &thread,
+                                    None,
+                                    error.to_string(),
+                                ));
+                                return;
+                            }
+                        };
+                        let confirmation = match decision {
+                            jobs::ScheduleDecision::Approved {
+                                job_name,
+                                content_hash,
+                                event: _,
+                            } => {
+                                Some(format!(
+                                    "Approved schedule activation for `{job_name}` revision `{content_hash}`. It will activate on the next scheduler tick."
+                                ))
+                            }
+                            jobs::ScheduleDecision::Rejected {
+                                job_name,
+                                content_hash,
+                                event: _,
+                            } => {
+                                Some(format!(
+                                    "Rejected schedule activation for `{job_name}` revision `{content_hash}`. The Markdown file remains available for manual use."
+                                ))
+                            }
+                            jobs::ScheduleDecision::Invalidated {
+                                job_name,
+                                content_hash,
+                                reason,
+                                event: _,
+                            } => {
+                                Some(format!(
+                                    "Could not activate `{job_name}` revision `{content_hash}` because it changed or became invalid: {reason}"
+                                ))
+                            }
+                            jobs::ScheduleDecision::AlreadyHandled
+                            | jobs::ScheduleDecision::NotScheduleReview => None,
+                        };
+                        if let Some(confirmation) = confirmation {
+                            if !reply_to(&self.ctx, &target, &confirmation).await {
+                                warn!("[{thread}] schedule review confirmation delivery failed");
+                            }
+                        }
                         self.complete_row(m.row_id, "approval_answer");
                         continue;
                     }
@@ -657,6 +799,7 @@ impl Gateway {
                     text: message_text,
                     reply_with_voice,
                     voice_attachment: m.voice.clone(),
+                    approval_origin,
                 };
                 if job.text.trim().eq_ignore_ascii_case("/stop") {
                     if !self.stop(job).await {
@@ -971,6 +1114,12 @@ impl Gateway {
 fn audit(ctx: &Ctx, event: AuditEvent) {
     if let Err(e) = ctx.audit.record(event) {
         error!("audit log error: {e}");
+    }
+}
+
+fn audit_schedule_events(ctx: &Ctx, ledger: &mut jobs::Ledger) {
+    if let Err(error) = ctx.audit.flush_schedule_reviews(ledger) {
+        error!("schedule audit outbox error: {error:#}");
     }
 }
 

@@ -43,6 +43,30 @@ pub(crate) fn same_file(expected: &std::fs::Metadata, opened: &std::fs::Metadata
         && opened.is_file()
 }
 
+#[cfg(unix)]
+pub(crate) fn file_identity(metadata: &std::fs::Metadata) -> String {
+    use std::os::unix::fs::MetadataExt;
+    format!(
+        "unix:{}:{}:{}:{}:{}",
+        metadata.dev(),
+        metadata.ino(),
+        metadata.len(),
+        metadata.ctime(),
+        metadata.ctime_nsec()
+    )
+}
+
+#[cfg(not(unix))]
+pub(crate) fn file_identity(metadata: &std::fs::Metadata) -> String {
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|value| value.as_nanos())
+        .unwrap_or_default();
+    format!("portable:{}:{modified}", metadata.len())
+}
+
 /// Restricts a Relay-owned path to owner-only access (0o700 directories,
 /// 0o600 files). A no-op on non-Unix platforms.
 #[cfg(unix)]
@@ -55,6 +79,18 @@ pub(crate) fn restrict_permissions(path: &Path, directory: bool) -> std::io::Res
 #[cfg(not(unix))]
 pub(crate) fn restrict_permissions(_path: &Path, _directory: bool) -> std::io::Result<()> {
     Ok(())
+}
+
+/// Lowercase hex-encodes bytes. Digest arrays in this crate's dependency set do
+/// not implement `LowerHex`, so `format!("{:x}", digest)` is unavailable.
+pub(crate) fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
+    use std::fmt::Write as _;
+    let bytes = bytes.as_ref();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut out, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    out
 }
 
 /// Builds an HTTP client with Relay's fixed Mozilla root set.
@@ -70,4 +106,22 @@ pub(crate) fn reqwest_client() -> Client {
     reqwest_client_builder()
         .build()
         .expect("build Relay HTTP client")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn hex_lower_encodes_digests_as_canonical_lowercase_hex() {
+        assert_eq!(hex_lower([]), "");
+        assert_eq!(hex_lower([0x00, 0x0f, 0xa0, 0xff]), "000fa0ff");
+        // Digest arrays have no LowerHex impl here, so this helper is the only
+        // path to the canonical sha256 hex used for stored content hashes.
+        assert_eq!(
+            hex_lower(Sha256::digest(b"relay")),
+            "682fbae20f3428bcec4c117c57bea18d438c4758d972909b41dbe22884e0d6b8"
+        );
+    }
 }

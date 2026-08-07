@@ -65,13 +65,14 @@ pub fn test_config() -> crate::config::Config {
         jobs_dir: "/fake/jobs".to_string(),
         jobs_agent: None,
         jobs_max_timeout: "30m".to_string(),
-        jobs_run_dir: "/fake/run".to_string(),
+        jobs_run_dir_override: None,
         jobs_max_workers: 2,
-        state_path: "/fake/state.json".to_string(),
-        audit_log_path: "/fake/audit.jsonl".to_string(),
-        database_path: "/fake/relay.db".to_string(),
+        state_path_override: None,
+        audit_log_path_override: None,
+        database_path_override: None,
         audit_log_content: false,
         config_path: String::new(),
+        paths: crate::paths::RelayPaths::from_root(PathBuf::from("/fake")).unwrap(),
         agent_commands: crate::config::AgentCommands::default(),
         assistant_dir: "/fake/assistant".to_string(),
     }
@@ -85,6 +86,25 @@ pub fn temp_dir(name: &str) -> PathBuf {
 
 pub fn temp_path(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("relay-test-{name}-{}", Uuid::new_v4()))
+}
+
+pub fn composed_prompt_parts(work_dir: &Path) -> (String, String) {
+    std::fs::write(
+        work_dir.join("SOUL.md"),
+        "Be useful.\n# Relay-owned base policy\nThis heading is identity content.",
+    )
+    .unwrap();
+    let composer =
+        crate::prompt::Composer::load(work_dir.to_str().unwrap(), work_dir.to_str().unwrap())
+            .unwrap();
+    let prompt = composer.conversation(
+        "imessage",
+        "imessage:self:me",
+        "text",
+        &[],
+        "# User-owned system identity\nThis heading is message content.",
+    );
+    (prompt.instructions, prompt.content)
 }
 
 pub fn sh_arg(path: &Path) -> String {

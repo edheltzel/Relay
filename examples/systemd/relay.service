@@ -1,15 +1,16 @@
 [Unit]
-Description=Relay personal assistant gateway
+Description=relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/relay --config %h/.relay/config.toml
+ExecStart=%h/.local/bin/relay
 WorkingDirectory=%h/.relay
 Restart=on-failure
 RestartSec=10
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=RELAY_HOME=%h/.relay
 EnvironmentFile=-%h/.config/relay/env
 
 [Install]

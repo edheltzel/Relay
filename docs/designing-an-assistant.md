@@ -15,12 +15,20 @@ assistant/
 ├── README.md
 ├── context/
 ├── evals/
-└── jobs/
+├── jobs/
+├── skills/
+│   └── relay/
+├── .agents/skills/relay -> ../../skills/relay
+└── .claude/skills/relay -> ../../skills/relay
 ```
 
 `AGENTS.md` is the shared instruction source. `CLAUDE.md` contains only
 `@AGENTS.md`, so Claude Code and Codex receive the same repository guidance
 without maintaining two copies.
+
+`skills/relay/` and its two discovery links are Relay-managed: `relay init`
+installs them and refreshes an unmodified copy on later runs. Do not edit them.
+Everything else in the repository is yours.
 
 ## Start with identity, not a long prompt
 
@@ -138,9 +146,10 @@ ln -s ../../skills/youtube .claude/skills/youtube
 ```
 
 Use relative links so the repository remains portable when cloned elsewhere.
-Commit the canonical skill and the links. `relay init` does not currently create
-or synchronize skill links, and Pi skill discovery remains controlled by Pi's
-own configuration.
+Commit the canonical skill and the links. `relay init` creates and refreshes
+only the managed `relay` skill and its links; skills you add are yours to link
+and maintain. Pi shares the `.agents/skills/` discovery path, and its skill
+discovery remains controlled by Pi's own configuration.
 
 ## Use jobs for scheduled outcomes
 

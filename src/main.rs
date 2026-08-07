@@ -8,6 +8,7 @@ mod assistant;
 mod audit;
 mod channel;
 mod claude;
+mod cli_json;
 mod codex;
 mod config;
 mod doctor;
@@ -16,11 +17,11 @@ mod history;
 mod imessage;
 mod jobs;
 mod markdown;
+mod paths;
 mod pi;
-mod rehydration;
+mod prompt;
 mod restart;
 mod slack;
-mod soul;
 mod store;
 mod telegram;
 #[cfg(test)]
@@ -30,7 +31,6 @@ mod voice;
 
 use anyhow::{bail, Context, Result};
 
-const DEFAULT_CONFIG_PATH: &str = "~/.relay/config.toml";
 const HELP: &str = "Relay turns coding agents into a personal assistant you can text.
 
 Usage: relay [OPTIONS] [COMMAND]
@@ -40,6 +40,8 @@ Commands:
   version           Print the installed Relay version
   init [path]       Create an assistant repository (default: ./assistant)
   doctor            Validate the configuration and dependencies
+  status            Show the installed gateway service status
+  paths             Show resolved configuration and storage paths
   reload            Reload the installed gateway service
   restart           Alias for reload
   job validate      Validate all installed jobs
@@ -47,18 +49,61 @@ Commands:
   job show <name>   Show an installed job
   job run <name>    Run an installed job
   job runs [name]   Show job run history
+  job reviews [name]  Show schedule activation review history
 
 Options:
-  --config <path>   Use a configuration file (default: ~/.relay/config.toml)
+  --config <path>   Use a configuration file (default: $RELAY_HOME/config.toml)
+  --json            Emit stable machine-readable output where supported
   -h, --help        Print help
   -V, --version     Print version
+
+Environment:
+  RELAY_HOME         Runtime root (default: ~/.relay)
 ";
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt().with_target(false).init();
+async fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let wants_json = raw_args.iter().any(|arg| arg == "--json");
+    if !wants_json {
+        tracing_subscriber::fmt().with_target(false).init();
+    }
 
-    let args = Args::parse(std::env::args().skip(1).collect())?;
+    let result = match Args::parse(raw_args) {
+        Ok(args) if args.json => run_json(args).await,
+        Ok(args) => run_human(args)
+            .await
+            .map_err(cli_json::CliError::unexpected),
+        Err(error) => Err(cli_json::CliError::invalid_input(error)),
+    };
+    if let Err(error) = result {
+        if wants_json {
+            cli_json::write_error(&error);
+        } else {
+            eprintln!("Error: {:#}", error.source());
+        }
+        std::process::exit(if wants_json { error.exit_code() } else { 1 });
+    }
+}
+
+async fn run_json(args: Args) -> Result<(), cli_json::CliError> {
+    let config_path = if args.command.json_needs_config() {
+        Some(args.resolved_config_path().map_err(|error| {
+            cli_json::CliError::configuration("Relay runtime paths could not be resolved", error)
+        })?)
+    } else {
+        None
+    };
+    cli_json::run(config_path.as_deref().unwrap_or(""), args.command).await
+}
+
+async fn run_human(args: Args) -> Result<()> {
+    let explicit_config = args.config_path.is_some();
+    let config_path = if args.command.needs_config() {
+        Some(args.resolved_config_path()?)
+    } else {
+        None
+    };
     match args.command {
         Command::Help => {
             print!("{HELP}");
@@ -69,7 +114,8 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Init(path) => {
-            let result = assistant::init(&path, &args.config_path)?;
+            let config_path = config_path.expect("init resolves a config path");
+            let result = assistant::init(&path, &config_path)?;
             println!("Initialized assistant at {}", result.root.display());
             println!(
                 "Configured assistant_root in {}",
@@ -85,7 +131,7 @@ async fn main() -> Result<()> {
             println!("    $EDITOR {}/SOUL.md", result.root.display());
             println!("    $EDITOR {}/context/README.md", result.root.display());
             println!("  Validate and run:");
-            if args.config_path == DEFAULT_CONFIG_PATH {
+            if !explicit_config {
                 println!("    relay doctor");
                 println!("    relay");
             } else {
@@ -94,11 +140,23 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Doctor => doctor::doctor(&args.config_path),
+        Command::Doctor => doctor::doctor(config_path.as_deref().expect("doctor has config")),
+        Command::Status => restart::print_gateway_status(),
+        Command::Paths => {
+            let cfg = load_run_config(config_path.as_deref().expect("paths has config"))?;
+            print!("{}", cli_json::format_paths(&cfg));
+            Ok(())
+        }
         Command::Restart => restart::gateway(),
-        Command::Job(command) => run_job_command(&args.config_path, command).await,
+        Command::Job(command) => {
+            run_job_command(
+                config_path.as_deref().expect("job command has config"),
+                command,
+            )
+            .await
+        }
         Command::Run => {
-            let cfg = load_run_config(&args.config_path)?;
+            let cfg = load_run_config(config_path.as_deref().expect("run has config"))?;
             doctor::preflight(&cfg).context("preflight")?;
             report_invalid_jobs(&cfg)?;
             gateway::GatewayGroup::new(cfg).context("init")?.run().await
@@ -111,7 +169,10 @@ fn load_run_config(path: &str) -> Result<config::Config> {
         bail!(message);
     }
     let expanded_path = util::expand_home(path);
-    config::Config::load(path).with_context(|| format!("load config {expanded_path}"))
+    let cfg = config::Config::load(path).with_context(|| format!("load config {expanded_path}"))?;
+    jobs::Ledger::capture_legacy_schedule_baseline(&cfg)
+        .context("capture existing schedule migration baseline")?;
+    Ok(cfg)
 }
 
 fn missing_config_message(path: &str) -> Option<String> {
@@ -122,9 +183,11 @@ fn missing_config_message(path: &str) -> Option<String> {
     ) {
         return None;
     }
-    if path == DEFAULT_CONFIG_PATH {
+    if paths::RelayPaths::discover()
+        .is_ok_and(|paths| paths.config == std::path::Path::new(&expanded_path))
+    {
         return Some(format!(
-            "configuration not found at {path}\n\nCreate it with:\n  relay init\n\nThen configure a channel and run `relay doctor`."
+            "configuration not found at {expanded_path}\n\nCreate it with:\n  relay init\n\nThen configure a channel and run `relay doctor`."
         ));
     }
     let path_arg = shell_quote(path);
@@ -147,38 +210,84 @@ fn shell_quote(value: &str) -> String {
 #[derive(Debug, PartialEq, Eq)]
 struct Args {
     command: Command,
-    config_path: String,
+    config_path: Option<String>,
+    json: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Command {
+pub(crate) enum Command {
     Help,
     Version,
     Run,
     Init(String),
     Doctor,
+    Status,
+    Paths,
     Restart,
     Job(JobCommand),
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum JobCommand {
+pub(crate) enum JobCommand {
     Validate,
     List,
     Show(String),
     Run(String),
     Runs(Option<String>),
+    Reviews(Option<String>),
+}
+
+impl Command {
+    fn needs_config(&self) -> bool {
+        !matches!(
+            self,
+            Self::Help | Self::Version | Self::Status | Self::Restart
+        )
+    }
+
+    fn json_needs_config(&self) -> bool {
+        matches!(
+            self,
+            Self::Doctor
+                | Self::Paths
+                | Self::Job(
+                    JobCommand::Validate
+                        | JobCommand::List
+                        | JobCommand::Show(_)
+                        | JobCommand::Runs(_)
+                        | JobCommand::Reviews(_)
+                )
+        )
+    }
 }
 
 impl Args {
+    fn resolved_config_path(&self) -> Result<String> {
+        if let Some(path) = &self.config_path {
+            return Ok(path.clone());
+        }
+        paths::RelayPaths::discover()?
+            .config
+            .into_os_string()
+            .into_string()
+            .map_err(|path| {
+                anyhow::anyhow!(
+                    "Relay config path is not valid UTF-8: {}",
+                    std::path::PathBuf::from(path).display()
+                )
+            })
+    }
+
     fn parse(args: Vec<String>) -> Result<Self> {
+        let json = args.iter().any(|arg| arg == "--json");
         if args
             .iter()
             .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
         {
             return Ok(Self {
                 command: Command::Help,
-                config_path: DEFAULT_CONFIG_PATH.to_string(),
+                config_path: None,
+                json,
             });
         }
         if args
@@ -187,11 +296,12 @@ impl Args {
         {
             return Ok(Self {
                 command: Command::Version,
-                config_path: DEFAULT_CONFIG_PATH.to_string(),
+                config_path: None,
+                json,
             });
         }
 
-        let mut config_path = DEFAULT_CONFIG_PATH.to_string();
+        let mut config_path = None;
         let mut positional = Vec::new();
         let mut i = 0;
         while i < args.len() {
@@ -200,8 +310,11 @@ impl Args {
                     let Some(path) = args.get(i + 1) else {
                         bail!("--config requires a path");
                     };
-                    config_path = path.clone();
+                    config_path = Some(path.clone());
                     i += 2;
+                }
+                "--json" => {
+                    i += 1;
                 }
                 value => {
                     positional.push(value.to_string());
@@ -216,6 +329,8 @@ impl Args {
             ["init"] => Command::Init("./assistant".to_string()),
             ["init", path] => Command::Init((*path).to_string()),
             ["doctor"] => Command::Doctor,
+            ["status"] => Command::Status,
+            ["paths"] => Command::Paths,
             ["reload" | "restart"] => Command::Restart,
             ["job", "validate"] => Command::Job(JobCommand::Validate),
             ["job", "list"] => Command::Job(JobCommand::List),
@@ -223,13 +338,18 @@ impl Args {
             ["job", "run", name] => Command::Job(JobCommand::Run((*name).to_string())),
             ["job", "runs"] => Command::Job(JobCommand::Runs(None)),
             ["job", "runs", name] => Command::Job(JobCommand::Runs(Some((*name).to_string()))),
+            ["job", "reviews"] => Command::Job(JobCommand::Reviews(None)),
+            ["job", "reviews", name] => {
+                Command::Job(JobCommand::Reviews(Some((*name).to_string())))
+            }
             _ => bail!(
-                "unknown command; expected help, version, init [path], doctor, reload, restart, job validate, job list, job show <name>, job run <name>, job runs [<name>], or --config <path>"
+                "unknown command; expected help, version, init [path], doctor, status, paths, reload, restart, job validate, job list, job show <name>, job run <name>, job runs [<name>], job reviews [<name>], --config <path>, or --json"
             ),
         };
         Ok(Self {
             command,
             config_path,
+            json,
         })
     }
 }
@@ -277,7 +397,7 @@ async fn run_job_command(config_path: &str, command: JobCommand) -> Result<()> {
             if let Some(name) = name.as_deref() {
                 jobs::validate_job_name(name)?;
             }
-            let ledger = jobs::Ledger::open(&cfg.database_path)?;
+            let ledger = jobs::Ledger::open(&cfg.paths.database)?;
             for run in ledger.runs(name.as_deref())? {
                 let trigger = run
                     .trigger_id
@@ -329,6 +449,38 @@ async fn run_job_command(config_path: &str, command: JobCommand) -> Result<()> {
             }
             Ok(())
         }
+        JobCommand::Reviews(name) => {
+            if let Some(name) = name.as_deref() {
+                jobs::validate_job_name(name)?;
+            }
+            let ledger = jobs::Ledger::open(&cfg.paths.database)?;
+            for review in ledger.schedule_reviews(name.as_deref())? {
+                let schedules = review
+                    .schedules
+                    .iter()
+                    .map(|trigger| {
+                        format!("{}:{:?}:{}", trigger.id, trigger.schedule, trigger.timezone)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}:{}\t{}\t{}",
+                    review.review_id,
+                    review.job_name,
+                    review.status,
+                    review.content_hash,
+                    schedules,
+                    review.backend,
+                    review.timeout_ms,
+                    review.workdir,
+                    review.delivery_channel,
+                    review.delivery_target,
+                    review.reviewed_by.unwrap_or_else(|| "-".to_string()),
+                    review.reason.unwrap_or_else(|| "-".to_string()),
+                );
+            }
+            Ok(())
+        }
     }
 }
 
@@ -353,6 +505,12 @@ mod tests {
     use crate::config::Config;
     use crate::test_support::{temp_dir, temp_path, test_config};
 
+    fn write_config_with_assistant(path: &Path, body: &str) -> std::path::PathBuf {
+        let assistant = temp_dir("config-assistant");
+        std::fs::write(path, format!("assistant_root = {:?}\n{body}", assistant)).unwrap();
+        assistant
+    }
+
     #[test]
     fn parses_doctor_with_config_path() {
         let args = Args::parse(vec![
@@ -366,7 +524,8 @@ mod tests {
             args,
             Args {
                 command: Command::Doctor,
-                config_path: "custom.toml".to_string(),
+                config_path: Some("custom.toml".to_string()),
+                json: false,
             }
         );
     }
@@ -384,7 +543,8 @@ mod tests {
             args,
             Args {
                 command: Command::Restart,
-                config_path: "custom.toml".to_string(),
+                config_path: Some("custom.toml".to_string()),
+                json: false,
             }
         );
     }
@@ -414,14 +574,16 @@ mod tests {
             Args::parse(vec!["help".into()]).unwrap(),
             Args {
                 command: Command::Help,
-                config_path: DEFAULT_CONFIG_PATH.to_string(),
+                config_path: None,
+                json: false,
             }
         );
         assert_eq!(
             Args::parse(vec!["--help".into()]).unwrap(),
             Args {
                 command: Command::Help,
-                config_path: DEFAULT_CONFIG_PATH.to_string(),
+                config_path: None,
+                json: false,
             }
         );
         assert_eq!(
@@ -475,7 +637,8 @@ mod tests {
             .unwrap(),
             Args {
                 command: Command::Job(JobCommand::List),
-                config_path: "x.toml".to_string(),
+                config_path: Some("x.toml".to_string()),
+                json: false,
             }
         );
         assert_eq!(
@@ -502,6 +665,12 @@ mod tests {
                 .command,
             Command::Job(JobCommand::Runs(Some("daily".to_string())))
         );
+        assert_eq!(
+            Args::parse(vec!["job".into(), "reviews".into(), "daily".into()])
+                .unwrap()
+                .command,
+            Command::Job(JobCommand::Reviews(Some("daily".to_string())))
+        );
     }
 
     #[test]
@@ -520,7 +689,8 @@ mod tests {
             .unwrap(),
             Args {
                 command: Command::Init("~/Code/assistant".to_string()),
-                config_path: "custom.toml".to_string(),
+                config_path: Some("custom.toml".to_string()),
+                json: false,
             }
         );
     }
@@ -549,7 +719,20 @@ mod tests {
             Args::parse(Vec::new()).unwrap(),
             Args {
                 command: Command::Run,
-                config_path: DEFAULT_CONFIG_PATH.to_string(),
+                config_path: None,
+                json: false,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_json_as_a_global_option() {
+        assert_eq!(
+            Args::parse(vec!["job".into(), "--json".into(), "list".into()]).unwrap(),
+            Args {
+                command: Command::Job(JobCommand::List),
+                config_path: None,
+                json: true,
             }
         );
     }
@@ -580,10 +763,8 @@ mod tests {
                 .to_string_lossy()
         );
         assert_eq!(
-            cfg.database_path,
-            Path::new(&std::env::var("HOME").unwrap())
-                .join(".relay/relay.db")
-                .to_string_lossy()
+            cfg.paths.database,
+            Path::new(&std::env::var("HOME").unwrap()).join(".relay/relay.db")
         );
         assert_eq!(
             cfg.assistant_root,
@@ -763,6 +944,145 @@ mod tests {
     }
 
     #[test]
+    fn explicit_runtime_paths_take_precedence_over_relay_home_defaults() {
+        let runtime = temp_dir("runtime-path-defaults");
+        let assistant = temp_dir("runtime-path-assistant");
+        let legacy = temp_dir("runtime-path-overrides");
+        let path = temp_path("runtime-path-config");
+        std::fs::write(
+            &path,
+            format!(
+                "self_handles = [\"me@icloud.com\"]\nassistant_root = {:?}\nstate_path = {:?}\ndatabase_path = {:?}\naudit_log_path = {:?}\njobs_run_dir = {:?}\n",
+                assistant,
+                legacy.join("state.json"),
+                legacy.join("relay.db"),
+                legacy.join("audit.jsonl"),
+                legacy.join("run"),
+            ),
+        )
+        .unwrap();
+
+        let cfg = Config::load_with_paths(
+            path.to_str().unwrap(),
+            crate::paths::RelayPaths::from_root(runtime.clone()).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(cfg.paths.root, runtime);
+        assert_eq!(cfg.paths.config, cfg.paths.root.join("config.toml"));
+        assert_eq!(cfg.paths.state, legacy.join("state.json"));
+        assert_eq!(cfg.paths.database, legacy.join("relay.db"));
+        assert_eq!(cfg.paths.audit, legacy.join("audit.jsonl"));
+        assert_eq!(cfg.paths.jobs_run, legacy.join("run"));
+        assert_eq!(cfg.paths.inbox, legacy.join("state.json.slack-inbox.db"));
+        assert_eq!(cfg.paths.cache, cfg.paths.root.join("cache"));
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
+        let _ = std::fs::remove_dir_all(legacy);
+        let _ = std::fs::remove_dir_all(cfg.paths.root);
+    }
+
+    #[test]
+    fn assistant_root_cannot_overlap_relay_home() {
+        let runtime = temp_dir("runtime-overlap");
+        let assistant = runtime.join("assistant");
+        std::fs::create_dir(&assistant).unwrap();
+        let path = temp_path("runtime-overlap-config");
+        std::fs::write(
+            &path,
+            format!(
+                "self_handles = [\"me@icloud.com\"]\nassistant_root = {:?}\n",
+                assistant
+            ),
+        )
+        .unwrap();
+
+        let error = Config::load_with_paths(
+            path.to_str().unwrap(),
+            crate::paths::RelayPaths::from_root(runtime.clone()).unwrap(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must stay outside Relay home"));
+        assert!(error.to_string().contains("set RELAY_HOME"));
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(runtime);
+    }
+
+    #[test]
+    fn legacy_assistant_layout_cannot_overlap_relay_home() {
+        let runtime = temp_dir("legacy-runtime-overlap");
+        let path = temp_path("legacy-runtime-overlap-config");
+        std::fs::write(
+            &path,
+            format!(
+                "self_handles = [\"me@icloud.com\"]\nassistant_dir = {:?}\njobs_dir = {:?}\n",
+                runtime,
+                runtime.join("jobs")
+            ),
+        )
+        .unwrap();
+
+        let error = Config::load_with_paths(
+            path.to_str().unwrap(),
+            crate::paths::RelayPaths::from_root(runtime.clone()).unwrap(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must stay outside Relay home"));
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(runtime);
+    }
+
+    #[test]
+    fn implicit_legacy_assistant_layout_cannot_overlap_relay_home() {
+        let runtime = std::path::PathBuf::from(crate::util::expand_home("~/.relay"));
+        let path = temp_path("implicit-legacy-runtime-overlap");
+        std::fs::write(&path, "self_handles = [\"me@icloud.com\"]\n").unwrap();
+
+        let error = Config::load_with_paths(
+            path.to_str().unwrap(),
+            crate::paths::RelayPaths::from_root(runtime.clone()).unwrap(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must stay outside Relay home"));
+        assert!(error.to_string().contains("separate assistant repository"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_relay_home_cannot_hide_assistant_overlap() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_dir("symlink-runtime-overlap");
+        let runtime = root.join("runtime");
+        let linked_runtime = root.join("linked-runtime");
+        let assistant = runtime.join("assistant");
+        std::fs::create_dir_all(&assistant).unwrap();
+        symlink(&runtime, &linked_runtime).unwrap();
+        let path = root.join("config.toml");
+        std::fs::write(
+            &path,
+            format!(
+                "self_handles = [\"me@icloud.com\"]\nassistant_root = {:?}\n",
+                assistant
+            ),
+        )
+        .unwrap();
+
+        let error = Config::load_with_paths(
+            path.to_str().unwrap(),
+            crate::paths::RelayPaths::from_root(linked_runtime).unwrap(),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must stay outside Relay home"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn config_load_rejects_an_inline_token_added_inside_the_assistant() {
         let root = temp_dir("assistant-inline-token");
         let path = root.join("config.toml");
@@ -801,7 +1121,7 @@ name = "relay"
     #[test]
     fn provider_sections_load_channel_settings() {
         let path = temp_path("provider-section-config");
-        std::fs::write(
+        let assistant = write_config_with_assistant(
             &path,
             r#"channel = "telegram"
 agent = "codex"
@@ -823,8 +1143,7 @@ allow_user_ids = ["U1"]
 openai_api_key = "config-openai-key"
 name = "onyx"
 "#,
-        )
-        .unwrap();
+        );
 
         let cfg = Config::load(path.to_str().unwrap()).unwrap();
 
@@ -841,12 +1160,13 @@ name = "onyx"
         );
         assert_eq!(cfg.voice_name, "onyx");
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]
     fn slack_config_requires_an_explicit_user_allowlist() {
         let path = temp_path("slack-allowlist-config");
-        std::fs::write(
+        let assistant = write_config_with_assistant(
             &path,
             r#"channel = "slack"
 [slack]
@@ -854,49 +1174,50 @@ app_token = "xapp-config"
 bot_token = "xoxb-config"
 allow_user_ids = []
 "#,
-        )
-        .unwrap();
+        );
 
         let error = Config::load(path.to_str().unwrap()).unwrap_err();
         assert!(error
             .to_string()
             .contains("set slack.allow_user_ids to explicit Slack user IDs"));
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]
     fn voice_config_defaults_to_cedar_and_rejects_unknown_names() {
         let default_path = temp_path("default-voice-config");
-        std::fs::write(&default_path, "self_handles = ['me@icloud.com']\n").unwrap();
+        let default_assistant =
+            write_config_with_assistant(&default_path, "self_handles = ['me@icloud.com']\n");
 
         let cfg = Config::load(default_path.to_str().unwrap()).unwrap();
         assert_eq!(cfg.voice_name, "cedar");
 
         let invalid_path = temp_path("invalid-voice-config");
-        std::fs::write(
+        let invalid_assistant = write_config_with_assistant(
             &invalid_path,
             "self_handles = ['me@icloud.com']\n[voice]\nname = 'unknown'\n",
-        )
-        .unwrap();
+        );
 
         let error = Config::load(invalid_path.to_str().unwrap()).unwrap_err();
         assert!(error.to_string().contains("invalid voice.name \"unknown\""));
         let _ = std::fs::remove_file(default_path);
         let _ = std::fs::remove_file(invalid_path);
+        let _ = std::fs::remove_dir_all(default_assistant);
+        let _ = std::fs::remove_dir_all(invalid_assistant);
     }
 
     #[test]
     fn voice_config_rejects_an_empty_openai_key() {
         let path = temp_path("empty-voice-key-config");
-        std::fs::write(
+        let assistant = write_config_with_assistant(
             &path,
             r#"self_handles = ["me@icloud.com"]
 
 [voice]
 openai_api_key = " "
 "#,
-        )
-        .unwrap();
+        );
 
         let error = Config::load(path.to_str().unwrap()).unwrap_err();
 
@@ -904,6 +1225,7 @@ openai_api_key = " "
             .to_string()
             .contains("voice.openai_api_key cannot be empty"));
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]
@@ -1082,7 +1404,7 @@ job_permission_profiles = ["restricted"]
     fn loaded_config_file_is_shielded_from_job_workdirs() {
         let dir = temp_dir("config-shield-load");
         let path = dir.join("config.toml");
-        std::fs::write(&path, "self_handles = [\"me@icloud.com\"]\n").unwrap();
+        let assistant = write_config_with_assistant(&path, "self_handles = [\"me@icloud.com\"]\n");
 
         let cfg = Config::load(path.to_str().unwrap()).unwrap();
 
@@ -1092,12 +1414,13 @@ job_permission_profiles = ["restricted"]
             .to_string()
             .contains("config file"));
         let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]
     fn multi_channel_config_is_opt_in_and_defers_primary_resolution() {
         let path = temp_path("multi-channel-config");
-        std::fs::write(
+        let assistant = write_config_with_assistant(
             &path,
             r#"channels = ["imessage", "telegram"]
 agent = "codex"
@@ -1113,8 +1436,7 @@ allow_user_ids = [7]
 channel = "telegram"
 target = "not-an-allowed-target"
 "#,
-        )
-        .unwrap();
+        );
 
         let cfg = Config::load(path.to_str().unwrap()).unwrap();
 
@@ -1130,25 +1452,26 @@ target = "not-an-allowed-target"
             })
         );
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]
     fn duplicate_enabled_channels_are_rejected() {
         let path = temp_path("duplicate-channel-config");
-        std::fs::write(
+        let assistant = write_config_with_assistant(
             &path,
             r#"channels = ["telegram", "telegram"]
 [telegram]
 bot_token = "secret"
 allow_user_ids = [7]
 "#,
-        )
-        .unwrap();
+        );
 
         let error = Config::load(path.to_str().unwrap()).unwrap_err();
 
         assert!(error.to_string().contains("duplicate enabled channel"));
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(assistant);
     }
 
     #[test]

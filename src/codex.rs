@@ -15,6 +15,7 @@ use crate::agent::{final_reply, Request, RunError, RunOutput};
 /// Runner invokes `codex exec` in non-interactive mode.
 pub struct Runner {
     pub bin: String,
+    pub cache_dir: PathBuf,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -39,9 +40,10 @@ struct OutputFile {
 }
 
 impl OutputFile {
-    fn create() -> std::io::Result<Self> {
-        let path =
-            std::env::temp_dir().join(format!("relay-codex-last-message-{}.txt", Uuid::new_v4()));
+    fn create(cache_dir: &Path) -> std::io::Result<Self> {
+        std::fs::create_dir_all(cache_dir)?;
+        crate::util::restrict_permissions(cache_dir, true)?;
+        let path = cache_dir.join(format!("codex-last-message-{}.txt", Uuid::new_v4()));
         OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -85,7 +87,7 @@ impl Runner {
         timeout: Duration,
         mode: RunMode,
     ) -> Result<RunOutput, RunError> {
-        let output_file = OutputFile::create()
+        let output_file = OutputFile::create(&self.cache_dir)
             .map_err(|error| RunError::Failed(format!("prepare Codex output: {error}")))?;
         let out_path = output_file.path.as_path();
         let attempt = crate::agent::output_with_retry(|| {
@@ -249,8 +251,8 @@ mod tests {
 
     use crate::agent::Request;
     use crate::test_support::{
-        assert_runner_contract, sh_arg, temp_dir, temp_path, ContractCase, ContractRequest,
-        ContractRunner, FakeCli, RunnerContract,
+        assert_runner_contract, composed_prompt_parts, sh_arg, temp_dir, temp_path, ContractCase,
+        ContractRequest, ContractRunner, FakeCli, RunnerContract,
     };
 
     impl ContractRunner for Runner {
@@ -286,6 +288,20 @@ mod tests {
         assert_eq!(last_agent_message_from_jsonl(s), Some("two".to_string()));
     }
 
+    #[test]
+    fn final_reply_file_uses_the_configured_cache_directory() {
+        let cache = temp_path("codex-output-cache");
+        let output = OutputFile::create(&cache).unwrap();
+
+        assert_eq!(output.path.parent(), Some(cache.as_path()));
+        assert!(output.path.is_file());
+        let path = output.path.clone();
+        drop(output);
+        assert!(!path.exists());
+
+        let _ = std::fs::remove_dir(cache);
+    }
+
     #[tokio::test]
     async fn satisfies_runner_contract() {
         assert_runner_contract(RunnerContract {
@@ -305,6 +321,7 @@ mod tests {
         let script = codex_success_script(&args_path, "codex reply", Some("codex-thread"));
         let cli = FakeCli::new("codex", &script);
         let runner = runner(cli.bin());
+        let (instructions, prompt) = composed_prompt_parts(&work_dir);
 
         let out = runner
             .run_unattended(
@@ -312,8 +329,8 @@ mod tests {
                     session_id: "",
                     is_new: true,
                     work_dir: work_dir.to_str().unwrap(),
-                    instructions: "assistant identity",
-                    prompt: "hello",
+                    instructions: &instructions,
+                    prompt: &prompt,
                 },
                 Duration::from_secs(5),
             )
@@ -329,8 +346,9 @@ mod tests {
         assert_arg_present(&args, "--json");
         assert_arg_pair(&args, "-C", work_dir.to_str().unwrap());
         assert!(!args.contains(&"--add-dir".to_string()));
-        assert_arg_pair(&args, "-c", &developer_instructions("assistant identity"));
-        assert_eq!(args.last().unwrap(), "hello");
+        let raw_args = std::fs::read_to_string(&args_path).unwrap();
+        assert!(raw_args.contains(&format!("-c\n{}\n", developer_instructions(&instructions))));
+        assert!(raw_args.ends_with(&format!("{prompt}\n")));
     }
 
     #[tokio::test]
@@ -514,7 +532,10 @@ sleep 2
     }
 
     fn runner(bin: String) -> Runner {
-        Runner { bin }
+        Runner {
+            bin,
+            cache_dir: temp_dir("codex-cache"),
+        }
     }
 
     fn request(work_dir: &str) -> Request<'_> {

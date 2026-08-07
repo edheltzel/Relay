@@ -75,12 +75,12 @@ See [configuration](../configuration.md#routing) for route precedence.
 
 On the first iMessage start, Relay records the newest existing Messages row
 without running it. Send a new message after the gateway starts. Later starts
-continue after the last completed row stored in `state.json`.
+continue after the last completed row stored in `relay.db`.
 
-Relay stores the last completed Messages row in `state.json` and accepted
-conversation turns in `relay.db`. It advances the cursor only after a row is
-ignored or completed. An earlier in-flight row prevents later completed rows
-from pushing the cursor past it.
+Relay stores the last completed Messages row and accepted conversation turns in
+`relay.db`. It advances the cursor only after a row is ignored or completed. An
+earlier in-flight row prevents later completed rows from pushing the cursor past
+it.
 
 If a generated outbound reply was stored before a crash, restart delivers the
 stored reply without generating a different second answer. A crash before the

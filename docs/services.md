@@ -14,14 +14,16 @@ own the service:
 
 ```sh
 relay init ~/Code/assistant
-# Edit ~/.relay/config.toml with your channel settings.
+# Edit $RELAY_HOME/config.toml with your channel settings.
 relay doctor
 ```
 
-Use absolute paths in service files. The service user needs:
+Set one absolute `RELAY_HOME` in the service definition. It defaults to
+`~/.relay` for interactive commands. The service user needs:
 
+- read and write access to `RELAY_HOME`
 - access to the configured `config.toml`
-- write access to `state_path`
+- read access and owner control of an existing legacy `state_path` for migration
 - write access to `audit_log_path`
 - write access to `database_path`
 - write access to `jobs_run_dir`
@@ -38,21 +40,27 @@ Use absolute paths in service files. The service user needs:
   `OPENAI_API_KEY` in the service environment, plus network access to
   `api.openai.com`
 
-`state_path` stores independent cursors for each channel and backend session
-ids. `database_path` stores the canonical conversation journal. Chat agents run
-from `assistant_root`. Keep these paths on durable storage. Restarting the
-service resumes after the last completed row and reuses existing backend
-sessions when the backend for that thread has not changed.
+`database_path` stores the canonical conversation journal, channel cursors, and
+backend session mappings. `state_path` is only a legacy JSON migration source
+and retained recovery copy; Relay does not write live state to it. The audit
+log, Slack recovery inbox, job locks, and cache remain separate paths derived
+from `RELAY_HOME`, unless their documented compatibility settings override
+them. Chat agents run from `assistant_root`. Keep these paths on durable
+storage. Restarting the service resumes after the last completed row and
+reuses existing backend sessions when the backend for that thread has not
+changed.
 
 Keep `assistant_root` in its own Git repository. Keep config secrets, state,
 databases, logs, locks, and service credentials outside it.
 
 ## macOS launchd
 
-Create the log directory:
+Create private service logs:
 
 ```sh
 mkdir -p ~/Library/Logs
+touch ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
+chmod 600 ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log
 ```
 
 Create `~/Library/LaunchAgents/com.edheltzel.relay.plist`. You can start from
@@ -71,8 +79,6 @@ and replace `YOU` with your macOS user name:
   <key>ProgramArguments</key>
   <array>
     <string>/Users/YOU/.local/bin/relay</string>
-    <string>--config</string>
-    <string>/Users/YOU/.relay/config.toml</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -80,6 +86,8 @@ and replace `YOU` with your macOS user name:
 
   <key>EnvironmentVariables</key>
   <dict>
+    <key>RELAY_HOME</key>
+    <string>/Users/YOU/.relay</string>
     <key>PATH</key>
     <string>/Users/YOU/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
@@ -127,8 +135,8 @@ override when service-level secret injection is preferred.
 
 ## Linux systemd
 
-Use this for Telegram-only deployments. The iMessage channel still requires
-macOS.
+Use this for Telegram or Slack deployments. The iMessage channel still
+requires macOS.
 
 Create the service directories:
 
@@ -141,17 +149,18 @@ Create `~/.config/systemd/user/relay.service`. You can start from
 
 ```ini
 [Unit]
-Description=Relay personal assistant gateway
+Description=relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/relay --config %h/.relay/config.toml
+ExecStart=%h/.local/bin/relay
 WorkingDirectory=%h/.relay
 Restart=on-failure
 RestartSec=10
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=RELAY_HOME=%h/.relay
 EnvironmentFile=-%h/.config/relay/env
 
 [Install]
@@ -195,7 +204,7 @@ loginctl enable-linger "$USER"
 ## Manual Jobs
 
 `relay job run <name>` executes in the invoking terminal process, not in the
-managed service. Use the same config file so the CLI and service share
+managed service. Use the same `RELAY_HOME` so the CLI and service share
 `relay.db`, `<assistant_root>/jobs`, and the local per-job lock directory.
 Invalid job files are reported and disabled individually; they do not stop the
 messaging service.
@@ -209,11 +218,41 @@ pending result delivery; it does not catch up missed cron times or rerun
 interrupted agent execution. Use `relay job runs` to distinguish execution state
 from delivery attempts.
 
+## Backup and state migration recovery
+
+Stop the managed service before taking a filesystem copy of `relay.db`, or use
+SQLite's online backup tooling. The database contains conversation history,
+job and delivery state, channel cursors, and backend session mappings. Back up
+the audit log and assistant repository separately. Slack's durable inbox stays
+in `<state_path>.slack-inbox.db`; include it when preserving unprocessed Slack
+events.
+
+After an upgrade, Relay imports an existing configured `state_path` in one
+transaction and leaves that JSON file unchanged. Keep it as a private recovery
+copy until a verified database backup exists. If migration fails, fix or
+restore the JSON and restart; Relay will not poll while the import is
+incomplete. If the post-migration database is lost, restore `relay.db` from
+backup. As a last resort, move the unusable database aside and restart with the
+retained JSON to recover its older cursors and sessions, understanding that
+conversation, job, and delivery records not present in JSON will be absent.
+
+New and changed enabled schedules are detected on each scheduler tick but stay
+inactive until their exact validated revision is approved from the bound
+allowlisted conversation. Review questions and accepted activations are stored
+in `database_path`, so restart does not lose them. Use
+`relay job reviews` to inspect
+proposed, rejected, invalidated, approved, and activated revisions. Editing or
+replacing an activated job invalidates its schedule before the changed revision
+can run. Schedule audit events also remain pending in the database until their
+JSONL append is synced, then replay after an audit write failure or restart.
+
 ## Agent-created jobs
 
 When asked, the agent writes jobs directly under `<assistant_root>/jobs` and
-runs `relay job validate`. There is no approval step. The agent's configuration
-decides whether it may write to the assistant repository.
+runs `relay job validate`. There is no draft installation step. The agent's
+configuration decides whether it may write to the assistant repository. Saving
+an enabled schedule and activating unattended recurrence are separate actions;
+the latter requires durable owner review.
 
 ## Restart Behavior
 
@@ -227,6 +266,21 @@ reply without generating a different second response.
 Ignored messages, completed rows, and setup failures advance the cursor. Rows
 newer than an in-flight row do not push the cursor past it until the earlier row
 is completed.
+
+## Backup and Recovery
+
+Stop the service before taking a filesystem-level backup. Back up the complete
+`RELAY_HOME` directory as one unit so config, cursors, the Slack inbox, canonical
+history, audit events, and job delivery state stay consistent. Back up
+`assistant_root` separately through its Git repository because it is
+user-owned and must not live under `RELAY_HOME`.
+
+To restore, stop the service, restore both locations to separate directories,
+set the service `RELAY_HOME` to the restored runtime root, confirm
+`assistant_root` in the restored config, then run `relay doctor` before starting
+the service. If a compatible older config sets `state_path`, `database_path`,
+`audit_log_path`, or `jobs_run_dir`, back up and restore those explicit
+locations too. The cache directory is disposable and can be omitted.
 
 ## Security Notes
 
