@@ -107,3 +107,21 @@ pub(crate) fn reqwest_client() -> Client {
         .build()
         .expect("build Relay HTTP client")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn hex_lower_encodes_digests_as_canonical_lowercase_hex() {
+        assert_eq!(hex_lower([]), "");
+        assert_eq!(hex_lower([0x00, 0x0f, 0xa0, 0xff]), "000fa0ff");
+        // Digest arrays have no LowerHex impl here, so this helper is the only
+        // path to the canonical sha256 hex used for stored content hashes.
+        assert_eq!(
+            hex_lower(Sha256::digest(b"relay")),
+            "682fbae20f3428bcec4c117c57bea18d438c4758d972909b41dbe22884e0d6b8"
+        );
+    }
+}

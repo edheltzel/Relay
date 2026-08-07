@@ -1,7 +1,11 @@
 # Configuration
 
-Relay reads TOML from `~/.relay/config.toml` by default. Pass `--config <path>`
-to use a different file for a gateway, doctor, init, or job command.
+Relay reads TOML from `$RELAY_HOME/config.toml` by default, where `RELAY_HOME`
+defaults to `~/.relay`. Setting `RELAY_HOME` relocates the config file and every
+other runtime path together. Pass `--config <path>` to use a different file for a
+gateway, doctor, init, or job command; it changes only the selected config file,
+not the runtime root. See the
+[CLI reference](reference/cli.md) for the resolved path contract.
 
 ```sh
 relay doctor
@@ -250,9 +254,9 @@ directories and evaluators receive `--no-approve`. Review
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `assistant_root` | required for new setups | Canonical root of the one assistant repository; `SOUL.md`, `context/`, `evals/`, and `jobs/` are derived |
-| `state_path` | `~/.relay/state.json` | Channel cursors and backend session IDs |
-| `database_path` | `~/.relay/relay.db` | Canonical conversation, approval, and job history |
-| `audit_log_path` | `~/.relay/audit.jsonl` | Structured local audit log |
+| `state_path` | `$RELAY_HOME/state.json` | Legacy JSON state imported once on upgrade, then kept only as a recovery copy; Relay writes no live state to it. Slack's durable inbox is `<state_path>.slack-inbox.db` |
+| `database_path` | `$RELAY_HOME/relay.db` | Canonical conversation, approval, and job history plus channel cursors and backend session IDs |
+| `audit_log_path` | `$RELAY_HOME/audit.jsonl` | Structured local audit log |
 | `audit_log_content` | `false` | Include message and reply content in audit events |
 
 ### Jobs
@@ -261,7 +265,7 @@ directories and evaluators receive `--no-approve`. Review
 | --- | --- | --- |
 | `jobs_agent` | root `agent` | Default jobs backend |
 | `jobs_max_timeout` | `"30m"` | Maximum accepted job timeout |
-| `jobs_run_dir` | `~/.relay/run` | Local advisory locks |
+| `jobs_run_dir` | `$RELAY_HOME/run` | Local advisory locks |
 | `jobs_max_workers` | `2` | Concurrent scheduled job workers |
 
 Relay validates that runtime state, locks, external config files, and job work

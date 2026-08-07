@@ -86,7 +86,9 @@ fn service_guide_protects_launchd_logs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let services = fs::read_to_string(root.join("docs/services.md")).unwrap();
 
-    assert!(services.contains("chmod 600 ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log"));
+    assert!(
+        services.contains("chmod 600 ~/Library/Logs/relay.err.log ~/Library/Logs/relay.out.log")
+    );
 }
 
 fn heading_anchors(markdown: &str) -> Vec<String> {

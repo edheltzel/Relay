@@ -149,7 +149,7 @@ Create `~/.config/systemd/user/relay.service`. You can start from
 
 ```ini
 [Unit]
-Description=Relay personal assistant gateway
+Description=relay personal assistant gateway
 After=network-online.target
 Wants=network-online.target
 
