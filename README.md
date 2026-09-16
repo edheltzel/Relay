@@ -1,6 +1,16 @@
-<div align="center">
+```
+██████╗ ███████╗██╗      █████╗ ██╗   ██╗
+██╔══██╗██╔════╝██║     ██╔══██╗╚██╗ ██╔╝
+██████╔╝█████╗  ██║     ███████║ ╚████╔╝
+██╔══██╗██╔══╝  ██║     ██╔══██║  ╚██╔╝
+██║  ██║███████╗███████╗██║  ██║   ██║
+╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝
+```
 
 # Relay
+
+> [!NOTE]
+> EdHeltzel's Agent Relay
 
 ### Your agent stays on your machine. Relay keeps it within reach.
 
@@ -14,8 +24,6 @@ agent's models, tools, skills, or permissions.
 [![License: MIT](https://img.shields.io/badge/license-MIT-111417)](LICENSE)
 
 [Send your first message](#how-to-send-your-first-message) · [Choose a channel](#use-another-channel) · [Read the docs](docs/index.md)
-
-</div>
 
 ## How to send your first message
 
