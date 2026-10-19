@@ -9,6 +9,9 @@
 
 # Relay
 
+> [!WARNING]
+> This project is no longer maintained. Use GrokBot and Dots instead.
+
 > [!NOTE]
 > EdHeltzel's Agent Relay
 
